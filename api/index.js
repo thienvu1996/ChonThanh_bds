@@ -2,7 +2,7 @@ import jsonServer from 'json-server';
 import path from 'path';
 
 const server = jsonServer.create();
-const dbPath = path.resolve(process.cwd(), 'db.json');
+const dbPath = path.resolve(process.cwd(), 'api/db.json');
 const router = jsonServer.router(dbPath);
 const middlewares = jsonServer.defaults();
 
