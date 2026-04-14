@@ -8,10 +8,10 @@ const DEFAULT_SETTINGS = {
   bannerUrl: "/assets/banner.jpg",
   heroTitle: "BĐS CHƠN THÀNH - GIÁ TRỊ THỰC, SINH LỜI THỰC",
   heroSubtitle: "Chuyên cung cấp đất nền, nhà phố tại khu vực Chơn Thành - Bình Phước với pháp lý minh bạch.",
-  phone: "0901.234.567",
-  zalo: "0901.234.567",
+  phone: "0858.550.088",
+  zalo: "0858.550.088",
   email: "info@bdschonthanh.vn",
-  address: "Quốc lộ 13, Phường Thành Tâm, Chơn Thành, Bình Phước",
+  address: "Quốc Lộ 14 , Mũi Tàu, Phường Chơn Thành, Thành Phố Đồng Nai",
   siteTitle: "BĐS Chơn Thành Official",
   footerText: "© 2026 BĐS Chơn Thành. Thiết kế và vận hành bởi Admin Team.",
 };
@@ -51,7 +51,7 @@ export const initSettings = async () => {
 export const saveSettings = async (newSettings) => {
   cachedSettings = newSettings;
   window.dispatchEvent(new Event("settingsUpdated"));
-  
+
   try {
     await updateSettings(newSettings);
     // Backup vào localStorage cho an toàn

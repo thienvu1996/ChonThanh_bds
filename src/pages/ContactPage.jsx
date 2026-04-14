@@ -153,7 +153,7 @@ export default function ContactPage() {
                   <Phone className="w-5 h-5 text-green-600 shrink-0" />
                   <div className="text-sm">
                     <p className="font-semibold text-gray-700">Hotline</p>
-                    <a href="tel:0901234567" className="text-green-600 hover:underline">0901.234.567</a>
+                    <a href="tel:0901234567" className="text-green-600 hover:underline">0858.550.088</a>
                   </div>
                 </li>
                 <li className="flex items-center gap-3">

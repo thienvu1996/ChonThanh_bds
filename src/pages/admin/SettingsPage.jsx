@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { getSettings, saveSettings, resetSettings } from "../../utils/settingsStore";
-import { 
-  Save, RefreshCw, Image as ImageIcon, Phone, MessageSquare, 
+import {
+  Save, RefreshCw, Image as ImageIcon, Phone, MessageSquare,
   Mail, MapPin, Type, Layout, Globe, Trash2
 } from "lucide-react";
 
@@ -58,18 +58,17 @@ export default function SettingsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={handleReset}
             className="flex items-center gap-2 px-5 py-3 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 font-bold text-sm transition-all"
           >
             <RefreshCw className="w-4 h-4" /> Khôi phục gốc
           </button>
-          <button 
+          <button
             onClick={handleSave}
             disabled={isSaving}
-            className={`flex items-center gap-2 px-8 py-3 rounded-xl font-black text-sm transition-all shadow-lg ${
-              isSaving ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-100"
-            }`}
+            className={`flex items-center gap-2 px-8 py-3 rounded-xl font-black text-sm transition-all shadow-lg ${isSaving ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-100"
+              }`}
           >
             {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             {isSaving ? "ĐANG LƯU..." : "LƯU CÀI ĐẶT"}
@@ -93,7 +92,7 @@ export default function SettingsPage() {
               </div>
               <h2 className="text-lg font-black text-gray-800 tracking-tight">Trang Chủ (Hero Section)</h2>
             </div>
-            
+
             <div className="space-y-6">
               <div>
                 <label className={labelCls}>Banner trang chủ (Kích thước khuyên dùng: 1920x800)</label>
@@ -161,16 +160,16 @@ export default function SettingsPage() {
               </div>
               <h2 className="text-lg font-black text-gray-800 tracking-tight">Kênh Liên Hệ (Hotline/Social)</h2>
             </div>
-            
+
             <div className="space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className={labelCls}><span className="flex items-center gap-2"><Phone className="w-3 h-3" /> Số điện thoại</span></label>
-                  <input name="phone" value={settings.phone} onChange={handleChange} className={inputCls} placeholder="0901.234.567" />
+                  <input name="phone" value={settings.phone} onChange={handleChange} className={inputCls} placeholder="0858.550.088" />
                 </div>
                 <div>
                   <label className={labelCls}><span className="flex items-center gap-2"><MessageSquare className="w-3 h-3" /> Zalo</span></label>
-                  <input name="zalo" value={settings.zalo} onChange={handleChange} className={inputCls} placeholder="0901.234.567" />
+                  <input name="zalo" value={settings.zalo} onChange={handleChange} className={inputCls} placeholder="0858.550.088" />
                 </div>
               </div>
 
