@@ -12,7 +12,7 @@ const DEFAULT_SETTINGS = {
   zalo: "0858.550.088",
   email: "info@bdschonthanh.vn",
   address: "Quốc Lộ 14 , Mũi Tàu, Phường Chơn Thành, Thành Phố Đồng Nai",
-  siteTitle: "BĐS Chơn Thành Official",
+  siteTitle: "BĐS Chơn Thành",
   footerText: "© 2026 BĐS Chơn Thành. Thiết kế và vận hành bởi Admin Team.",
 };
 

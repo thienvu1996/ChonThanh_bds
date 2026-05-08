@@ -1,173 +1,146 @@
 // src/services/api.js
-// Service layer – tách biệt hoàn toàn với UI.
-// VITE_USE_MOCK_DATA=true  → dùng localStorage (demo cho khách, không cần server)
-// VITE_USE_MOCK_DATA=false → gọi json-server thật
+import { supabase } from "../utils/supabaseClient";
 
-import { mockPropertyData, mockPropertyList } from "../utils/mockData";
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL;
-const USE_MOCK  = import.meta.env.VITE_USE_MOCK_DATA === "true";
-
-// ─── Khóa localStorage ──────────────────────────────────────
-const KEY_PROPERTIES = "bds_mock_properties";
-const KEY_SETTINGS   = "bds_chonthanh_settings";
-
-// ─── localStorage helpers ───────────────────────────────────
-const lsGetProperties = () => {
-  try {
-    const raw = localStorage.getItem(KEY_PROPERTIES);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-};
-
-const lsSaveProperties = (list) =>
-  localStorage.setItem(KEY_PROPERTIES, JSON.stringify(list));
-
-/** Trả về danh sách mock: ưu tiên localStorage (đã chỉnh sửa), fallback về mockData */
-const getMockList = () => lsGetProperties() ?? [...mockPropertyList];
-
-// ─── Giả lập độ trễ mạng ────────────────────────────────────
-const delay = (ms = 350) => new Promise(r => setTimeout(r, ms));
+/** 
+ * ĐÃ LOẠI BỎ MOCK DATA THEO YÊU CẦU NGƯỜI DÙNG 
+ * Hệ thống hiện tại chỉ sử dụng dữ liệu thật từ Supabase.
+ */
 
 // ════════════════════════════════════════════════════════════
-// PROPERTIES
+// PROPERTIES (BẤT ĐỘNG SẢN)
 // ════════════════════════════════════════════════════════════
 
-/** Danh sách tất cả BĐS — tự fallback về mock nếu server không khả dụng */
+/** Lấy danh sách tất cả BĐS */
 export async function fetchProperties() {
-  if (USE_MOCK) {
-    await delay();
-    return getMockList();
+  const { data, error } = await supabase
+    .from('properties')
+    .select('*')
+    .order('posted_at', { ascending: false });
+
+  if (error) {
+    console.error("[api] Supabase error:", error);
+    return []; // Trả về mảng rỗng nếu lỗi, không dùng mock data
   }
-  try {
-    const res = await fetch(`${BASE_URL}/properties`);
-    if (!res.ok) throw new Error(`${res.status}`);
-    return res.json();
-  } catch {
-    // Server không chạy → dùng localStorage/mockData để không crash
-    console.warn("[api] json-server không khả dụng, dùng mock data.");
-    return getMockList();
-  }
+  return data || [];
 }
 
-/** Chi tiết 1 BĐS — tự fallback về mock nếu server không khả dụng */
+/** Chi tiết 1 BĐS */
 export async function fetchPropertyDetails(id) {
-  if (USE_MOCK) {
-    await delay();
-    const list = getMockList();
-    const found = list.find(p => p.id === id);
-    return found ? { ...mockPropertyData, ...found } : (() => { throw new Error("Không tìm thấy BĐS"); })();
+  const { data, error } = await supabase
+    .from('properties')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    console.error("[api] Supabase error:", error);
+    throw new Error("Không tìm thấy thông tin BĐS");
   }
-  try {
-    const res = await fetch(`${BASE_URL}/properties/${id}`);
-    if (!res.ok) throw new Error(`${res.status}`);
-    return res.json();
-  } catch {
-    console.warn("[api] json-server không khả dụng, dùng mock data.");
-    const list = getMockList();
-    const found = list.find(p => p.id === id);
-    return found ? { ...mockPropertyData, ...found } : (() => { throw new Error("Không tìm thấy BĐS"); })();
-  }
+  return data;
 }
 
 /** Thêm BĐS mới */
 export async function createProperty(payload) {
-  if (USE_MOCK) {
-    await delay(200);
-    const list = getMockList();
-    const newItem = { ...payload, id: `bds-${Date.now()}`, postedAt: new Date().toISOString().split("T")[0] };
-    lsSaveProperties([...list, newItem]);
-    return newItem;
-  }
-  const res = await fetch(`${BASE_URL}/properties`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error(`Lỗi tạo BĐS: ${res.status}`);
-  return res.json();
+  const { data, error } = await supabase
+    .from('properties')
+    .insert([payload])
+    .select()
+    .single();
+
+  if (error) throw new Error(`Lỗi tạo BĐS: ${error.message}`);
+  return data;
 }
 
-/** Cập nhật BĐS (PUT toàn bộ) */
+/** Cập nhật BĐS */
 export async function updateProperty(id, payload) {
-  if (USE_MOCK) {
-    await delay(200);
-    const list = getMockList().map(p => p.id === id ? { ...p, ...payload, id } : p);
-    lsSaveProperties(list);
-    return payload;
-  }
-  const res = await fetch(`${BASE_URL}/properties/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error(`Lỗi cập nhật BĐS: ${res.status}`);
-  return res.json();
+  const { data, error } = await supabase
+    .from('properties')
+    .update(payload)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw new Error(`Lỗi cập nhật BĐS: ${error.message}`);
+  return data;
 }
 
 /** Xóa BĐS */
 export async function deleteProperty(id) {
-  if (USE_MOCK) {
-    await delay(200);
-    lsSaveProperties(getMockList().filter(p => p.id !== id));
-    return { id };
-  }
-  const res = await fetch(`${BASE_URL}/properties/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(`Lỗi xóa BĐS: ${res.status}`);
+  const { error } = await supabase
+    .from('properties')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw new Error(`Lỗi xóa BĐS: ${error.message}`);
   return { id };
 }
 
 // ════════════════════════════════════════════════════════════
-// SETTINGS
+// SETTINGS (CẤU HÌNH WEB)
 // ════════════════════════════════════════════════════════════
-const CHUNK_LIMIT = 80 * 1024;
 
 export async function fetchSettings() {
-  if (USE_MOCK) {
-    return JSON.parse(localStorage.getItem(KEY_SETTINGS) || "{}");
-  }
-  const res = await fetch(`${BASE_URL}/settings`);
-  if (!res.ok) throw new Error(`Lỗi tải cấu hình: ${res.status}`);
-  const data = await res.json();
-  if (data.bannerUrl_1 != null) {
-    data.bannerUrl = (data.bannerUrl_1 || "") + (data.bannerUrl_2 || "");
-    delete data.bannerUrl_1;
-    delete data.bannerUrl_2;
+  const { data, error } = await supabase
+    .from('settings')
+    .select('*')
+    .eq('id', 1)
+    .maybeSingle(); // Dùng maybeSingle để tránh báo lỗi nếu chưa có settings nào
+
+  if (error) {
+    console.warn("[api] Lỗi tải cấu hình:", error.message);
+    return null;
   }
   return data;
 }
 
 export async function updateSettings(newSettings) {
-  if (USE_MOCK) {
-    localStorage.setItem(KEY_SETTINGS, JSON.stringify(newSettings));
-    return newSettings;
-  }
-  const { bannerUrl, ...rest } = newSettings;
-  const isBase64 = bannerUrl?.startsWith("data:");
-  const isLarge  = isBase64 && bannerUrl.length > CHUNK_LIMIT;
+  const { data, error } = await supabase
+    .from('settings')
+    .upsert({ ...newSettings, id: 1 })
+    .select()
+    .single();
 
-  if (isLarge) {
-    const mid   = Math.ceil(bannerUrl.length / 2);
-    const part1 = bannerUrl.slice(0, mid);
-    const part2 = bannerUrl.slice(mid);
-    const r1 = await fetch(`${BASE_URL}/settings`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...rest, bannerUrl: null, bannerUrl_1: part1, bannerUrl_2: null }),
-    });
-    if (!r1.ok) throw new Error(`Lỗi lưu cấu hình (phần 1): ${r1.status}`);
-    const r2 = await fetch(`${BASE_URL}/settings`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bannerUrl_2: part2 }),
-    });
-    if (!r2.ok) throw new Error(`Lỗi lưu cấu hình (phần 2): ${r2.status}`);
-    return r2.json();
-  }
+  if (error) throw new Error(`Lỗi lưu cấu hình: ${error.message}`);
+  return data;
+}
 
-  const payload = { ...newSettings, bannerUrl_1: null, bannerUrl_2: null };
-  const res = await fetch(`${BASE_URL}/settings`, {
-    method: "PUT", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error(`Lỗi lưu cấu hình: ${res.status}`);
-  return res.json();
+// ════════════════════════════════════════════════════════════
+// LEADS (KHÁCH HÀNG QUAN TÂM)
+// ════════════════════════════════════════════════════════════
+
+/** Gửi thông tin khách hàng */
+export async function submitLead(payload) {
+  const { data, error } = await supabase
+    .from('leads')
+    .insert([payload])
+    .select()
+    .single();
+
+  if (error) throw new Error(`Lỗi gửi thông tin: ${error.message}`);
+  return data;
+}
+
+/** Lấy danh sách khách hàng (Dành cho Admin) */
+export async function fetchLeads() {
+  const { data, error } = await supabase
+    .from('leads')
+    .select('*, properties(title)')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error("[api] fetchLeads Error:", error);
+    throw new Error(`Lỗi tải danh sách khách: ${error.message}`);
+  }
+  return data || [];
+}
+
+/** Đánh dấu đã đọc */
+export async function markLeadAsRead(id) {
+  const { data, error } = await supabase
+    .from('leads')
+    .update({ is_read: true })
+    .eq('id', id);
+
+  if (error) throw new Error(`Lỗi cập nhật: ${error.message}`);
+  return data;
 }

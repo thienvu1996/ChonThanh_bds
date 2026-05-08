@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useEffect } from "react";
 import { getLeads } from "../utils/leadStore";
+import { supabase } from "../utils/supabaseClient";
 
 const MENU = [
   { label: "Tổng quan", href: "/admin", icon: LayoutDashboard },
@@ -48,8 +49,16 @@ export default function AdminLayout() {
     return () => window.removeEventListener("leadsUpdated", updateCount);
   }, []);
 
-  const handleLogout = () => {
-    sessionStorage.removeItem("admin_token");
+  const [userEmail, setUserEmail] = useState("");
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) setUserEmail(session.user.email);
+    });
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     navigate("/admin/login");
   };
 
@@ -131,12 +140,12 @@ export default function AdminLayout() {
         <div className="px-4 py-6 border-t border-gray-100 bg-gray-50/20 space-y-3">
           {/* User profile */}
           <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-white border border-gray-100 shadow-sm mb-2">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white text-base font-black shadow-md">
-              A
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white text-base font-black shadow-md uppercase">
+              {userEmail ? userEmail[0] : "A"}
             </div>
             <div className="min-w-0">
-              <p className="text-[13px] font-bold text-gray-900 truncate">Admin User</p>
-              <p className="text-[10px] font-bold text-gray-400 uppercase">Quản trị viên</p>
+              <p className="text-[11px] font-bold text-gray-900 truncate">{userEmail || "Admin User"}</p>
+              <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Quản trị viên</p>
             </div>
           </div>
 
@@ -163,7 +172,7 @@ export default function AdminLayout() {
       {/* ─── MAIN ─── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Topbar */}
-        <header className="h-16 flex items-center justify-between px-5 bg-white border-b border-gray-100 sticky top-0 z-20">
+        <header className="h-12 flex items-center justify-between px-5 bg-white border-b border-gray-100 sticky top-0 z-20">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setOpen(true)}

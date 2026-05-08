@@ -1,16 +1,16 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
-import { fetchPropertyDetails } from "../services/api";
+import { fetchPropertyDetails, submitLead } from "../services/api";
 import { getSettings } from "../utils/settingsStore";
-import { saveLead } from "../utils/leadStore";
 import MainLayout from "../layouts/MainLayout";
 import PropertyMap from "../components/property/PropertyMap";
 import {
   Loader2, AlertTriangle, MapPin, Phone, MessageCircle,
   ChevronRight, Maximize2, Ruler, FileCheck, Tag, Calendar,
   Home, Star, Send, Layers, Play, Image as ImageIcon,
-  Map as MapIcon, Info, ExternalLink, X, ChevronLeft
+  Map as MapIcon, Info, ExternalLink, X, ChevronLeft, Lock
 } from "lucide-react";
+import toast from "react-hot-toast";
 
 const FALLBACK = "/assets/placeholder-land.jpg";
 
@@ -64,7 +64,7 @@ function SectionTitle({ title, icon: Icon }) {
   );
 }
 
-function ImageGrid({ images, title, onImageClick }) {
+function ImageGrid({ images, title, onImageClick, blur = false }) {
   const imgs = images?.length ? images : [FALLBACK];
   return (
     <div className="grid grid-cols-2 gap-2">
@@ -77,13 +77,23 @@ function ImageGrid({ images, title, onImageClick }) {
           <img
             src={img}
             alt={`${title} - ${i + 1}`}
-            className="w-full h-full object-cover"
+            className={`w-full h-full object-cover transition-all duration-500 ${blur ? "blur-xl" : ""}`}
             onError={e => { e.currentTarget.src = FALLBACK; }}
           />
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-            <div className="p-3 bg-white/20 backdrop-blur-md rounded-full text-white">
-              <Maximize2 className="w-6 h-6" />
+          {blur && (
+            <div className="absolute inset-0 bg-blue-900/10 flex flex-col items-center justify-center text-white p-4 text-center">
+              <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center mb-2">
+                <Lock className="w-5 h-5" />
+              </div>
+              <p className="text-[10px] font-black uppercase tracking-widest">Bấm để xem pháp lý</p>
             </div>
+          )}
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+            {!blur && (
+              <div className="p-3 bg-white/20 backdrop-blur-md rounded-full text-white">
+                <Maximize2 className="w-6 h-6" />
+              </div>
+            )}
           </div>
         </div>
       ))}
@@ -102,6 +112,82 @@ function VideoPlayer({ url }) {
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowFullScreen
       ></iframe>
+    </div>
+  );
+}
+
+// ─── Modal Thu thập SĐT để xem pháp lý ──────────────────────────
+function LegalAccessModal({ isOpen, onClose, onUnlock, propertyTitle, propertyId, zalo }) {
+  const [phone, setPhone] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!phone) return;
+    setSubmitting(true);
+    try {
+      await submitLead({
+        name: "Khách xem Pháp lý",
+        phone: phone,
+        message: `Khách hàng đang yêu cầu xem ảnh sổ đỏ của bđS: ${propertyTitle}`,
+        source: "Yêu cầu xem Sổ đỏ",
+        propertyName: propertyTitle,
+        propertyId: propertyId
+      });
+      toast.success("Cảm ơn! Bạn đã có thể xem ảnh pháp lý.");
+      onUnlock();
+      onClose();
+    } catch (err) {
+      toast.error("Vui lòng thử lại sau");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 scale-in-center">
+      <div className="absolute inset-0 bg-blue-900/40 backdrop-blur-md" onClick={onClose} />
+      <div className="relative w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl p-8 overflow-hidden">
+        <div className="absolute top-0 right-0 p-4">
+           <button onClick={onClose} className="text-gray-400 p-2"><X size={20} /></button>
+        </div>
+        <div className="flex flex-col items-center text-center gap-4">
+          <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center text-blue-600">
+             <FileCheck size={32} />
+          </div>
+          <div>
+            <h3 className="text-xl font-black text-gray-900 leading-tight">Xem Hình Sổ Đỏ</h3>
+            <p className="text-sm text-gray-500 font-medium mt-1">Để lại Số điện thoại để chúng tôi mở khóa thông tin pháp lý cho bạn.</p>
+          </div>
+          <form onSubmit={handleSubmit} className="w-full space-y-4">
+            <input 
+              type="tel" required
+              value={phone} onChange={e => setPhone(e.target.value)}
+              placeholder="Nhập số điện thoại của bạn..."
+              className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold text-center outline-none focus:ring-4 focus:ring-blue-100 focus:bg-white transition-all"
+            />
+            <button 
+              type="submit" disabled={submitting}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-xl shadow-blue-100 flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
+            >
+              {submitting ? "ĐANG MỞ KHÓA..." : "XÁC NHẬN & XEM NGAY"}
+            </button>
+            <div className="relative">
+               <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
+               <div className="relative flex justify-center text-[8px] font-black uppercase tracking-tighter"><span className="bg-white px-2 text-gray-300">Hoặc</span></div>
+            </div>
+            <a 
+              href={`https://zalo.me/${zalo?.replace(/\./g, "")}`} target="_blank" rel="noreferrer"
+              className="w-full bg-[#0068ff] hover:bg-blue-700 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-blue-50"
+            >
+               <MessageCircle size={18} /> GỬI QUA ZALO CHO TÔI
+            </a>
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest italic">Cam kết bảo mật thông tin khách hàng</p>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }
@@ -127,7 +213,7 @@ function ContactForm({ phone, zalo, propertyTitle, propertyId }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    saveLead({
+    submitLead({
       name: form.name,
       phone: form.sdt,
       message: form.note,
@@ -207,6 +293,9 @@ export default function PropertyDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lightbox, setLightbox] = useState({ images: [], index: null });
+  const [isLegalUnlocked, setIsLegalUnlocked] = useState(false);
+  const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
+
   const settings = getSettings();
 
   useEffect(() => {
@@ -222,6 +311,14 @@ export default function PropertyDetailPage() {
   const closeLightbox = () => setLightbox({ images: [], index: null });
   const prevImage = () => setLightbox(p => ({ ...p, index: (p.index - 1 + p.images.length) % p.images.length }));
   const nextImage = () => setLightbox(p => ({ ...p, index: (p.index + 1) % p.images.length }));
+
+  const handleLegalImageClick = () => {
+    if (!isLegalUnlocked) {
+      setIsLeadModalOpen(true);
+    } else {
+      openLightbox(0, property.legal_images || []);
+    }
+  };
 
   if (loading) return (
     <MainLayout>
@@ -258,6 +355,16 @@ export default function PropertyDetailPage() {
         onNext={nextImage} 
       />
 
+      {/* Lead Modal for Legal Docs */}
+      <LegalAccessModal 
+        isOpen={isLeadModalOpen}
+        onClose={() => setIsLeadModalOpen(false)}
+        onUnlock={() => setIsLegalUnlocked(true)}
+        propertyTitle={property.title}
+        propertyId={property.id}
+        zalo={settings.zalo}
+      />
+
       <div className="bg-gray-50/50 border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <nav className="flex items-center gap-2 text-xs text-gray-400 mb-2 overflow-x-auto whitespace-nowrap pb-2 scrollbar-hide">
@@ -275,9 +382,9 @@ export default function PropertyDetailPage() {
                   property.status === "Đang bán" ? "bg-green-600 text-white" : "bg-red-600 text-white"
                 }`}>{property.status}</span>
                 {property.isFeatured && (
-                  <span className="flex items-center gap-1 text-[10px] uppercase tracking-widest font-black bg-orange-500 text-white px-2.5 py-1 rounded-md">
-                    <Star className="w-3 h-3 fill-white" /> Nổi bật
-                  </span>
+                   <span className="flex items-center gap-1 text-[10px] uppercase tracking-widest font-black bg-orange-500 text-white px-2.5 py-1 rounded-md">
+                     <Star className="w-3 h-3 fill-white" /> Nổi bật
+                   </span>
                 )}
               </div>
               <h1 className="text-2xl lg:text-3xl font-black text-gray-900 leading-tight">
@@ -305,26 +412,51 @@ export default function PropertyDetailPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-8 pb-32 md:pb-16 transition-all duration-500">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
           
           {/* LEFT COLUMN: Media Section */}
-          <div className="lg:col-span-7 space-y-12">
+          <div className="md:col-span-7 space-y-12">
             
-            {/* 1. Hình ảnh thửa đất */}
+            {/* 1. Hình ảnh thực tế */}
             <section>
               <SectionTitle title="Hình ảnh thực tế" icon={ImageIcon} />
               <ImageGrid images={property.images} title={property.title} onImageClick={openLightbox} />
             </section>
 
-            {/* 2. Hình sổ đỏ */}
-            {property.registryImages?.length > 0 && (
-              <section className="bg-orange-50/30 p-6 rounded-3xl border border-orange-100">
-                <SectionTitle title="Pháp lý (Sổ đỏ/Sổ hồng)" icon={FileCheck} />
-                <ImageGrid images={property.registryImages} title="Sổ đỏ" onImageClick={openLightbox} />
-                <p className="mt-4 text-sm text-gray-500 italic flex items-center gap-2">
-                  <Info className="w-4 h-4 text-orange-400" />
-                  Sổ hồng riêng, thổ cư 100%, công chứng ngay trong ngày.
-                </p>
+            {/* 2. Hình sổ đỏ (Bảo mật) */}
+            {property.legal_images?.length > 0 && (
+              <section className="bg-blue-50/30 p-6 rounded-3xl border border-blue-100 transition-all duration-700">
+                <div className="flex justify-between items-center mb-4">
+                   <SectionTitle title="Pháp lý (Giấy tờ/Sổ đỏ)" icon={FileCheck} />
+                   {isLegalUnlocked && <span className="text-[10px] font-black text-green-600 uppercase flex items-center gap-1"><Check size={12}/> Đã mở khóa</span>}
+                </div>
+                
+                <ImageGrid 
+                  images={property.legal_images} 
+                  title="Giấy tờ pháp lý" 
+                  onImageClick={handleLegalImageClick}
+                  blur={!isLegalUnlocked} 
+                />
+                
+                {!isLegalUnlocked ? (
+                  <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 p-4 bg-white rounded-2xl border border-blue-100">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-blue-100 rounded-lg text-blue-600"><Lock size={18}/></div>
+                      <p className="text-xs font-bold text-blue-900 leading-tight">Ảnh sổ đỏ đã được làm mờ để bảo mật.<br/><span className="text-[10px] text-blue-500 font-medium">Vui lòng để lại SĐT để xem bản rõ nét.</span></p>
+                    </div>
+                    <button 
+                      onClick={() => setIsLeadModalOpen(true)}
+                      className="whitespace-nowrap bg-blue-600 text-white px-6 py-3 rounded-xl font-black text-xs shadow-lg shadow-blue-100 active:scale-95 transition-all"
+                    >
+                      MỞ KHÓA NGAY
+                    </button>
+                  </div>
+                ) : (
+                  <p className="mt-4 text-sm text-gray-500 italic flex items-center gap-2 animate-in slide-in-from-left duration-500">
+                    <Info className="w-4 h-4 text-blue-400" />
+                    Bản chụp đầy đủ thông tin pháp lý, trích lục bản đồ.
+                  </p>
+                )}
               </section>
             )}
 
@@ -336,15 +468,7 @@ export default function PropertyDetailPage() {
               </section>
             )}
 
-            {/* 4. Ảnh khu vực xung quanh */}
-            {property.surroundingImages?.length > 0 && (
-              <section>
-                <SectionTitle title="Khu vực xung quanh" icon={Layers} />
-                <ImageGrid images={property.surroundingImages} title="Khu vực" onImageClick={openLightbox} />
-              </section>
-            )}
-
-            {/* 5. Vị trí trên bản đồ */}
+            {/* 4. Vị trí trên bản đồ */}
             <section>
               <SectionTitle title="Vị trí & Chỉ đường" icon={MapIcon} />
               {property.coordinates?.lat ? (
@@ -366,7 +490,7 @@ export default function PropertyDetailPage() {
           </div>
 
           {/* RIGHT COLUMN: Info Section */}
-          <div className="lg:col-span-5 space-y-8">
+          <div className="md:col-span-5 space-y-8">
             <div className="sticky top-24 space-y-8">
               
               {/* 1. Thông số thửa đất */}
@@ -381,7 +505,6 @@ export default function PropertyDetailPage() {
                   <InfoItem icon={Ruler} label="Mặt tiền" value={property.frontage} />
                   <InfoItem icon={Layers} label="Đường trước đất" value={property.roadWidth || "Đường nhựa hiện hữu"} />
                   <InfoItem icon={FileCheck} label="Pháp lý" value={property.legalStatus} />
-                  <InfoItem icon={MapIcon} label="Quy hoạch" value={property.planning} />
                   <InfoItem icon={Calendar} label="Ngày đăng" value={property.postedAt} />
                 </div>
 

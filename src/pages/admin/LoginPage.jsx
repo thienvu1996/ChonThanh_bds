@@ -2,33 +2,38 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Lock, User, Eye, EyeOff, LogIn, ArrowRight } from "lucide-react";
 import logo from "../../assets/logo.png";
+import { supabase } from "../../utils/supabaseClient";
+import toast from "react-hot-toast";
 
 export default function LoginPage() {
-  const [credentials, setCredentials] = useState({ username: "", password: "" });
+  const [credentials, setCredentials] = useState({ email: "", password: "" }); // Đổi username thành email
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleChange = (e) => {
     setCredentials({ ...credentials, [e.target.name]: e.target.value });
-    setError("");
   };
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Giả lập xử lý đăng nhập
-    setTimeout(() => {
-      if (credentials.username === "admin" && credentials.password === "admin123") {
-        sessionStorage.setItem("admin_token", "secret-token-123");
-        navigate("/admin");
-      } else {
-        setError("Tài khoản hoặc mật khẩu không chính xác.");
-        setIsLoading(false);
-      }
-    }, 1000);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: credentials.email,
+        password: credentials.password,
+      });
+
+      if (error) throw error;
+
+      toast.success("Đăng nhập thành công!");
+      navigate("/admin");
+    } catch (err) {
+      toast.error(err.message || "Tài khoản hoặc mật khẩu không chính xác.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -40,31 +45,26 @@ export default function LoginPage() {
             <img src={logo} alt="Logo" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-2xl font-black text-gray-900 tracking-tight mb-2">Quản Trị Hệ Thống</h1>
-          <p className="text-gray-400 text-sm font-bold uppercase tracking-widest">BĐS Chơn Thành Official</p>
+          <p className="text-gray-400 text-sm font-bold uppercase tracking-widest">BĐS Chơn Thành</p>
         </div>
 
         {/* Login Form */}
         <div className="bg-white rounded-[2rem] shadow-2xl shadow-blue-100/50 p-8 md:p-10 border border-gray-50">
           <form onSubmit={handleLogin} className="space-y-6">
-            {error && (
-              <div className="p-4 rounded-xl bg-red-50 border border-red-100 text-red-600 text-xs font-bold animate-shake text-center">
-                {error}
-              </div>
-            )}
 
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Tài khoản</label>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Email quản trị</label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400 group-focus-within:text-blue-600 transition-colors">
                   <User size={18} />
                 </div>
                 <input
-                  type="text"
-                  name="username"
+                  type="email"
+                  name="email"
                   required
-                  value={credentials.username}
+                  value={credentials.email}
                   onChange={handleChange}
-                  placeholder="admin"
+                  placeholder="admin@example.com"
                   className="w-full pl-11 pr-4 py-4 rounded-2xl border border-gray-100 bg-gray-50/50 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition-all font-bold text-gray-700"
                 />
               </div>
@@ -114,7 +114,7 @@ export default function LoginPage() {
 
         {/* Home link */}
         <div className="mt-10 text-center">
-          <button 
+          <button
             onClick={() => navigate("/")}
             className="text-gray-400 hover:text-blue-600 text-xs font-bold uppercase tracking-widest transition-colors flex items-center gap-2 mx-auto justify-center"
           >
