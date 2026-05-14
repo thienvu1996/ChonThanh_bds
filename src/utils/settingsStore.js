@@ -1,76 +1,69 @@
-// settingsStore.js
-// Cầu nối giữa giao diện (UI) và Backend (JSON Server) thông qua api.js
-import { fetchSettings, updateSettings } from "../services/api";
+// src/utils/settingsStore.js
+import { fetchSettings, normalizeSettings, updateSettings } from "../services/api";
 
 const SETTINGS_KEY = "bds_chonthanh_settings";
 
-const DEFAULT_SETTINGS = {
-  bannerUrl: "/assets/banner.jpg",
-  heroTitle: "BĐS CHƠN THÀNH - GIÁ TRỊ THỰC, SINH LỜI THỰC",
-  heroSubtitle: "Chuyên cung cấp đất nền, nhà phố tại khu vực Chơn Thành - Bình Phước với pháp lý minh bạch.",
+const DEFAULT_SETTINGS = normalizeSettings({
+  banner_url: "/assets/banner.jpg",
+  hero_title: "BĐS CHƠN THÀNH - GIÁ TRỊ THỰC, SINH LỜI THỰC",
+  hero_subtitle: "Chuyên cung cấp đất nền, nhà phố tại khu vực Chơn Thành - Bình Phước với pháp lý minh bạch.",
   phone: "0858.550.088",
   zalo: "0858.550.088",
   email: "info@bdschonthanh.vn",
   address: "Quốc Lộ 14 , Mũi Tàu, Phường Chơn Thành, Thành Phố Đồng Nai",
-  siteTitle: "BĐS Chơn Thành",
-  footerText: "© 2026 BĐS Chơn Thành. Thiết kế và vận hành bởi Admin Team.",
-};
+  site_title: "BĐS Chơn Thành",
+  footer_text: "© 2026 BĐS Chơn Thành. Thiết kế và vận hành bởi Admin Team.",
+  search_prefix: "Chơn Thành, Bình Phước",
+});
 
-// Cache local để trả về đồng bộ cho các component nhanh chóng
 let cachedSettings = DEFAULT_SETTINGS;
 
-/**
- * Lấy cấu hình từ cache (đồng bộ)
- */
-export const getSettings = () => {
-  return cachedSettings;
+const withoutNullish = (settings = {}) =>
+  Object.fromEntries(Object.entries(settings).filter(([, value]) => value !== null && value !== undefined));
+
+const mergeWithDefaults = (settings = {}) =>
+  normalizeSettings({ ...DEFAULT_SETTINGS, ...withoutNullish(settings) });
+
+const publish = () => {
+  window.dispatchEvent(new Event("settingsUpdated"));
 };
 
-/**
- * Đồng bộ cache với Server (bất đồng bộ)
- * Nên gọi khi khởi tạo ứng dụng
- */
+export const getSettings = () => cachedSettings;
+
 export const initSettings = async () => {
   try {
     const serverSettings = await fetchSettings();
     if (serverSettings && Object.keys(serverSettings).length > 0) {
-      cachedSettings = { ...DEFAULT_SETTINGS, ...serverSettings };
-      window.dispatchEvent(new Event("settingsUpdated"));
+      cachedSettings = mergeWithDefaults(serverSettings);
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(cachedSettings));
+      publish();
+      return cachedSettings;
     }
   } catch (error) {
-    console.error("Không thể tải cấu hình từ server, dùng mặc định:", error);
-    // Fallback về localStorage nếu cần
-    const local = localStorage.getItem(SETTINGS_KEY);
-    if (local) cachedSettings = JSON.parse(local);
+    console.error("Không thể tải cấu hình từ Supabase, dùng cache cục bộ:", error);
   }
+
+  const local = localStorage.getItem(SETTINGS_KEY);
+  if (local) {
+    cachedSettings = mergeWithDefaults(JSON.parse(local));
+    publish();
+  }
+  return cachedSettings;
 };
 
-/**
- * Lưu cấu hình lên Server và cập nhật cache
- */
 export const saveSettings = async (newSettings) => {
-  cachedSettings = newSettings;
-  window.dispatchEvent(new Event("settingsUpdated"));
-
-  try {
-    await updateSettings(newSettings);
-    // Backup vào localStorage cho an toàn
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
-  } catch (error) {
-    console.error("Lỗi khi lưu cấu hình lên server:", error);
-  }
+  const normalized = mergeWithDefaults(newSettings);
+  const saved = await updateSettings(normalized);
+  cachedSettings = mergeWithDefaults(saved);
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(cachedSettings));
+  publish();
+  return cachedSettings;
 };
 
 export const resetSettings = async () => {
-  cachedSettings = DEFAULT_SETTINGS;
-  window.dispatchEvent(new Event("settingsUpdated"));
-  try {
-    await updateSettings(DEFAULT_SETTINGS);
-    localStorage.removeItem(SETTINGS_KEY);
-  } catch (error) {
-    console.error("Lỗi khi reset cấu hình:", error);
-  }
+  const saved = await updateSettings(DEFAULT_SETTINGS);
+  cachedSettings = mergeWithDefaults(saved);
+  localStorage.removeItem(SETTINGS_KEY);
+  publish();
+  return cachedSettings;
 };
-
-// Tự động kích hoạt init khi module được load (optional, nhưng an toàn hơn nếu gọi ở main.jsx)
-// initSettings();

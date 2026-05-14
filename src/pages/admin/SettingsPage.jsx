@@ -4,7 +4,8 @@ import {
   MapPin, Image as ImageIcon, Layout, Shield, 
   RefreshCcw, Check, Sparkles, Camera
 } from "lucide-react";
-import { fetchSettings, updateSettings } from "../../services/api";
+import { fetchSettings } from "../../services/api";
+import { saveSettings } from "../../utils/settingsStore";
 import toast from "react-hot-toast";
 
 const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
@@ -85,7 +86,8 @@ export default function SettingsPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      await updateSettings(settings);
+      const saved = await saveSettings(settings);
+      setSettings(saved);
       toast.success("Đã lưu tất cả thay đổi!");
     } catch (err) {
       toast.error("Lỗi khi lưu cấu hình");

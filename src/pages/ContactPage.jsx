@@ -1,10 +1,13 @@
 // src/pages/ContactPage.jsx
 // 2 cột desktop, 1 cột mobile: Form liên hệ + Thông tin công ty + Bản đồ
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import MainLayout from "../layouts/MainLayout";
 import PropertyMap from "../components/property/PropertyMap";
 import { MapPin, Phone, Mail, Send, CheckCircle } from "lucide-react";
+import { submitLead } from "../services/api";
+import { getSettings } from "../utils/settingsStore";
+import toast from "react-hot-toast";
 
 const OFFICE_COORDINATES = { lat: 11.4240, lng: 106.5962 };
 
@@ -20,14 +23,35 @@ const NEEDS = [
 export default function ContactPage() {
   const [form, setForm] = useState({ name: "", phone: "", need: "", message: "" });
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [settings, setSettings] = useState(getSettings());
+
+  useEffect(() => {
+    const handleUpdate = () => setSettings(getSettings());
+    window.addEventListener("settingsUpdated", handleUpdate);
+    return () => window.removeEventListener("settingsUpdated", handleUpdate);
+  }, []);
 
   const handleChange = (e) =>
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Mock submit – thực tế sẽ gọi API backend
-    setSubmitted(true);
+    setSubmitting(true);
+    try {
+      await submitLead({
+        name: form.name,
+        phone: form.phone,
+        message: [form.need ? `Nhu cầu: ${form.need}` : "", form.message].filter(Boolean).join("\n"),
+        source: "Trang Contact",
+      });
+      setSubmitted(true);
+      toast.success("Đã gửi yêu cầu tư vấn!");
+    } catch (error) {
+      toast.error(error.message || "Không thể gửi yêu cầu, vui lòng thử lại.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -127,10 +151,11 @@ export default function ContactPage() {
 
                 <button
                   type="submit"
+                  disabled={submitting}
                   className="w-full flex items-center justify-center gap-2 bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 rounded-xl text-sm transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
                 >
                   <Send className="w-4 h-4" />
-                  Gửi Yêu Cầu
+                  {submitting ? "Đang gửi..." : "Gửi Yêu Cầu"}
                 </button>
               </form>
             )}
@@ -146,21 +171,21 @@ export default function ContactPage() {
                   <MapPin className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
                   <div className="text-sm text-gray-700">
                     <p className="font-semibold">Địa chỉ</p>
-                    <p className="text-gray-500">Khu phố 4, Phường Thành Tâm, Thị xã Chơn Thành, Bình Phước</p>
+                    <p className="text-gray-500">{settings.address}</p>
                   </div>
                 </li>
                 <li className="flex items-center gap-3">
                   <Phone className="w-5 h-5 text-green-600 shrink-0" />
                   <div className="text-sm">
                     <p className="font-semibold text-gray-700">Hotline</p>
-                    <a href="tel:0901234567" className="text-green-600 hover:underline">0858.550.088</a>
+                    <a href={`tel:${settings.phone}`} className="text-green-600 hover:underline">{settings.phone}</a>
                   </div>
                 </li>
                 <li className="flex items-center gap-3">
                   <Mail className="w-5 h-5 text-blue-600 shrink-0" />
                   <div className="text-sm">
                     <p className="font-semibold text-gray-700">Email</p>
-                    <a href="mailto:info@bdschonthanh.com" className="text-blue-600 hover:underline">info@bdschonthanh.com</a>
+                    <a href={`mailto:${settings.email}`} className="text-blue-600 hover:underline">{settings.email}</a>
                   </div>
                 </li>
               </ul>

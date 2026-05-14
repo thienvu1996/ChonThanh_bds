@@ -1,19 +1,45 @@
 // src/pages/admin/DashboardPage.jsx
-// Trang tổng quan Admin: 4 stat cards + bảng BĐS mới nhất
-
-import { mockPropertyList } from "../../utils/mockData";
+import { useEffect, useState } from "react";
 import { Building2, CheckCircle, Clock, Eye, Users } from "lucide-react";
 import { Link } from "react-router-dom";
-import { getLeads } from "../../utils/leadStore";
+import { fetchLeads, fetchProperties } from "../../services/api";
 
 export default function DashboardPage() {
-  const leads = getLeads();
-  const newLeadsCount = leads.filter(l => l.status === "Mới").length;
+  const [properties, setProperties] = useState([]);
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadDashboard = async () => {
+      setLoading(true);
+      try {
+        const [propertyData, leadData] = await Promise.all([
+          fetchProperties(),
+          fetchLeads(),
+        ]);
+        if (!mounted) return;
+        setProperties(propertyData);
+        setLeads(leadData);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    loadDashboard();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const newLeadsCount = leads.filter(l => !l.is_read).length;
+  const activeProperties = properties.filter(p => p.status !== "Đã bán").length;
 
   const STATS = [
     {
       label: "Tổng số BĐS",
-      value: "6",
+      value: properties.length.toString(),
       icon: Building2,
       color: "text-blue-600",
       bg: "bg-blue-50",
@@ -28,27 +54,27 @@ export default function DashboardPage() {
       border: "border-red-100",
     },
     {
-      label: "Đang chờ duyệt",
-      value: "1",
+      label: "Tin đang bán",
+      value: activeProperties.toString(),
       icon: Clock,
       color: "text-yellow-600",
       bg: "bg-yellow-50",
       border: "border-yellow-100",
     },
     {
-      label: "Lượt xem hôm nay",
-      value: "312",
+      label: "Đã xử lý",
+      value: leads.filter(l => l.is_read).length.toString(),
       icon: Eye,
       color: "text-purple-600",
       bg: "bg-purple-50",
       border: "border-purple-100",
     },
   ];
+
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-gray-900">Tổng Quan</h2>
 
-      {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {STATS.map(({ label, value, icon: Icon, color, bg, border }) => (
           <div
@@ -59,14 +85,13 @@ export default function DashboardPage() {
               <Icon className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-2xl font-extrabold text-gray-900">{value}</p>
+              <p className="text-2xl font-extrabold text-gray-900">{loading ? "..." : value}</p>
               <p className="text-xs text-gray-500 leading-tight">{label}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* BĐS mới nhất */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <h3 className="font-semibold text-gray-900 text-sm">BĐS Mới Nhất</h3>
@@ -78,7 +103,7 @@ export default function DashboardPage() {
           </Link>
         </div>
         <div className="divide-y divide-gray-50">
-          {mockPropertyList.slice(0, 4).map((p) => (
+          {properties.slice(0, 4).map((p) => (
             <div key={p.id} className="flex items-center gap-4 px-5 py-3">
               <img
                 src={p.thumbnail || "/assets/placeholder-land.jpg"}
@@ -98,6 +123,11 @@ export default function DashboardPage() {
               </div>
             </div>
           ))}
+          {!loading && properties.length === 0 && (
+            <div className="px-5 py-8 text-center text-sm font-bold text-gray-400">
+              Chưa có BĐS nào trên Supabase
+            </div>
+          )}
         </div>
       </div>
     </div>

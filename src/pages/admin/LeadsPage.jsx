@@ -4,7 +4,7 @@ import {
   Trash2, CheckCircle, Clock, AlertCircle, Download, ExternalLink,
   ChevronRight, Filter
 } from "lucide-react";
-import { fetchLeads, markLeadAsRead, deleteProperty } from "../../services/api"; // Lưu ý: Cần thêm hàm deleteLead vào api.js
+import { deleteLead, fetchLeads, markLeadAsRead } from "../../services/api";
 import { supabase } from "../../utils/supabaseClient";
 import toast from "react-hot-toast";
 import * as XLSX from 'xlsx';
@@ -23,7 +23,7 @@ export default function LeadsPage() {
       .channel('leads_changes')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leads' }, (payload) => {
         console.log('Có khách hàng mới:', payload.new);
-        setLeads(prev => [payload.new, ...prev]);
+        loadLeads();
         toast.success("🔔 CÓ KHÁCH HÀNG MỚI QUAN TÂM!", {
           duration: 5000,
           position: 'top-center',
@@ -69,8 +69,7 @@ export default function LeadsPage() {
   const handleDeleteLead = async (id) => {
     if (!window.confirm("Bạn có chắc chắn muốn xóa thông tin này?")) return;
     try {
-      const { error } = await supabase.from('leads').delete().eq('id', id);
-      if (error) throw error;
+      await deleteLead(id);
       setLeads(prev => prev.filter(l => l.id !== id));
       toast.success("Đã xóa khách hàng");
     } catch (e) {

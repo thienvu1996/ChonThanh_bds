@@ -1,5 +1,5 @@
 // src/pages/DatNenPage.jsx
-// Trang danh sách Đất Nền - filter từ mockPropertyList theo type
+// Trang danh sách Đất Nền - filter dữ liệu Supabase theo type
 
 import { useEffect, useState } from "react";
 import { fetchProperties } from "../services/api";

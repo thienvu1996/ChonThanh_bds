@@ -9,21 +9,19 @@ const FALLBACK = "/assets/placeholder-land.jpg";
 export default function PropertyCard({ property }) {
   if (!property) return null;
 
-  const {
-    id,
-    title,
-    formattedPrice,
-    formattedArea,
-    frontage,
-    legalStatus,
-    thumbnail,
-    fallbackImage,
-    location,
-    type,
-    isFeatured,
-    status,
-    tags,
-  } = property;
+  const id = property.id;
+  const title = property.title;
+  const formattedPrice = property.formattedPrice || property.formatted_price;
+  const formattedArea = property.formattedArea || property.formatted_area;
+  const frontage = property.frontage;
+  const legalStatus = property.legalStatus || property.legal_status;
+  const thumbnail = property.thumbnail || property.thumbnail_url;
+  const fallbackImage = property.fallbackImage;
+  const location = property.location;
+  const type = property.type;
+  const isFeatured = property.isFeatured ?? property.is_featured;
+  const status = property.status;
+  const tags = property.tags;
 
   const imgSrc = thumbnail || fallbackImage || FALLBACK;
 

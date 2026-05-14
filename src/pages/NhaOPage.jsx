@@ -1,5 +1,5 @@
 // src/pages/NhaOPage.jsx
-// Trang danh sách Nhà Ở - filter từ mockPropertyList theo type
+// Trang danh sách Nhà Ở - filter dữ liệu Supabase theo type
 
 import { useEffect, useState } from "react";
 import { fetchProperties } from "../services/api";

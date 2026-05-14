@@ -4,13 +4,15 @@ import PropertyMap from "../components/property/PropertyMap";
 import { MapPin, Phone, Mail, Send, CheckCircle, Home, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getSettings } from "../utils/settingsStore";
-import { saveLead } from "../utils/leadStore";
+import { submitLead } from "../services/api";
+import toast from "react-hot-toast";
 
 const OFFICE_COORDINATES = { lat: 11.4240, lng: 106.5962 };
 
 export default function LienHePage() {
   const [settings, setSettings] = useState(getSettings());
   const [form, setForm] = useState({ name: "", phone: "", message: "" });
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const handleUpdate = () => setSettings(getSettings());
@@ -22,13 +24,23 @@ export default function LienHePage() {
   const handleChange = (e) =>
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    saveLead({
-      ...form,
-      source: "Trang Liên Hệ"
-    });
-    setSubmitted(true);
+    setSubmitting(true);
+    try {
+      await submitLead({
+        name: form.name,
+        phone: form.phone,
+        message: form.message,
+        source: "Trang Liên Hệ",
+      });
+      setSubmitted(true);
+      toast.success("Đã gửi yêu cầu tư vấn!");
+    } catch (error) {
+      toast.error(error.message || "Không thể gửi yêu cầu, vui lòng thử lại.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -116,10 +128,11 @@ export default function LienHePage() {
                 </div>
                 <button
                   type="submit"
+                  disabled={submitting}
                   className="w-full flex items-center justify-center gap-2 bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 rounded-xl text-sm transition-all duration-200 hover:-translate-y-0.5"
                 >
                   <Send className="w-4 h-4" />
-                  Gửi Yêu Cầu
+                  {submitting ? "Đang gửi..." : "Gửi Yêu Cầu"}
                 </button>
               </form>
             )}

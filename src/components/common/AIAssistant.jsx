@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { MessageSquare, X, Send, Bot, User, Phone } from "lucide-react";
-import { saveLead } from "../../utils/leadStore";
+import { submitLead } from "../../services/api";
 
 export default function AIAssistant() {
   const [isOpen, setIsOpen] = useState(false);
@@ -30,7 +30,7 @@ export default function AIAssistant() {
     setInput("");
 
     // Giả lập AI phản hồi
-    setTimeout(() => {
+    setTimeout(async () => {
       let botResponse = "";
       
       // Logic đơn giản: Nếu tin nhắn chứa số điện thoại
@@ -38,14 +38,18 @@ export default function AIAssistant() {
       const match = userMsg.match(phoneRegex);
 
       if (match) {
-        saveLead({
-          name: "Khách từ AI Chat",
-          phone: match[1],
-          message: userMsg,
-          source: "AI Assistant"
-        });
-        botResponse = "Cảm ơn bạn! Tôi đã ghi lại số điện thoại. Chuyên viên sẽ gọi cho bạn ngay trong ít phút nữa.";
-        setHasPhone(true);
+        try {
+          await submitLead({
+            name: "Khách từ AI Chat",
+            phone: match[1],
+            message: userMsg,
+            source: "AI Assistant",
+          });
+          botResponse = "Cảm ơn bạn! Tôi đã ghi lại số điện thoại. Chuyên viên sẽ gọi cho bạn ngay trong ít phút nữa.";
+          setHasPhone(true);
+        } catch (error) {
+          botResponse = "Tôi chưa lưu được số điện thoại do lỗi kết nối. Bạn thử gửi lại giúp tôi nhé.";
+        }
       } else if (!hasPhone) {
         botResponse = "Để tôi hỗ trợ bạn tốt nhất, bạn vui lòng để lại Số điện thoại nhé. Tôi sẽ gửi thông tin qua Zalo cho bạn.";
       } else {

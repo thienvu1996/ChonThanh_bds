@@ -210,20 +210,28 @@ function InfoItem({ icon: Icon, label, value }) {
 function ContactForm({ phone, zalo, propertyTitle, propertyId }) {
   const [form, setForm] = useState({ name: "", sdt: "", note: "" });
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    submitLead({
-      name: form.name,
-      phone: form.sdt,
-      message: form.note,
-      source: "Trang Chi tiết BĐS",
-      propertyName: propertyTitle,
-      propertyId: propertyId
-    });
-    setSent(true);
-    setTimeout(() => setSent(false), 4000);
-    setForm({ name: "", sdt: "", note: "" });
+    setSubmitting(true);
+    try {
+      await submitLead({
+        name: form.name,
+        phone: form.sdt,
+        message: form.note,
+        source: "Trang Chi tiết BĐS",
+        propertyName: propertyTitle,
+        propertyId,
+      });
+      setSent(true);
+      setTimeout(() => setSent(false), 4000);
+      setForm({ name: "", sdt: "", note: "" });
+    } catch (error) {
+      toast.error(error.message || "Không thể gửi yêu cầu, vui lòng thử lại.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -268,8 +276,8 @@ function ContactForm({ phone, zalo, propertyTitle, propertyId }) {
               className="w-full px-4 py-3.5 rounded-2xl border border-gray-100 bg-gray-50/50 text-sm resize-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition-all"
             />
           </div>
-          <button type="submit" className="w-full bg-blue-700 hover:bg-blue-800 text-white font-black py-4 rounded-2xl text-sm transition-all hover:shadow-lg hover:shadow-blue-200 active:scale-95 flex items-center justify-center gap-2">
-            <Send className="w-4 h-4" /> GỬI YÊU CẦU NGAY
+          <button type="submit" disabled={submitting} className="w-full bg-blue-700 hover:bg-blue-800 text-white font-black py-4 rounded-2xl text-sm transition-all hover:shadow-lg hover:shadow-blue-200 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60">
+            <Send className="w-4 h-4" /> {submitting ? "ĐANG GỬI..." : "GỬI YÊU CẦU NGAY"}
           </button>
         </form>
       )}

@@ -21,8 +21,8 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useEffect } from "react";
-import { getLeads } from "../utils/leadStore";
 import { supabase } from "../utils/supabaseClient";
+import { fetchLeads } from "../services/api";
 
 const MENU = [
   { label: "Tổng quan", href: "/admin", icon: LayoutDashboard },
@@ -38,15 +38,29 @@ export default function AdminLayout() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const updateCount = () => {
-      const leads = getLeads();
-      const count = leads.filter(l => l.status === "Mới").length;
-      setNewLeadsCount(count);
+    let mounted = true;
+
+    const updateCount = async () => {
+      try {
+        const leads = await fetchLeads();
+        if (!mounted) return;
+        setNewLeadsCount(leads.filter(l => !l.is_read).length);
+      } catch (error) {
+        if (mounted) setNewLeadsCount(0);
+      }
     };
-    
+
     updateCount();
-    window.addEventListener("leadsUpdated", updateCount);
-    return () => window.removeEventListener("leadsUpdated", updateCount);
+
+    const channel = supabase
+      .channel("admin_layout_leads_count")
+      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, updateCount)
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const [userEmail, setUserEmail] = useState("");

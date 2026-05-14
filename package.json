@@ -7,6 +7,7 @@
     "dev": "vite --host",
     "server": "json-server --watch api/db.json --port 3001",
     "build": "vite build",
+    "create-admin": "node scripts/create-admin.js",
     "seed": "node scripts/seed.js",
     "preview": "vite preview"
   },

@@ -4,12 +4,14 @@
 -- 1. Bảng lưu trữ Thông tin Bất động sản
 CREATE TABLE IF NOT EXISTS properties (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  legacy_id text UNIQUE,
   title text NOT NULL,
   description text,
   price numeric,
   formatted_price text,
   area numeric,
   formatted_area text,
+  frontage text,
   location text,
   coordinates jsonb DEFAULT '{"lat": 11.424, "lng": 106.5962}'::jsonb,
   type text NOT NULL,
@@ -18,6 +20,9 @@ CREATE TABLE IF NOT EXISTS properties (
   thumbnail_url text,
   images text[] DEFAULT '{}',
   legal_status text,
+  legal_images text[] DEFAULT '{}',
+  video_url text,
+  road_width text,
   tags text[] DEFAULT '{}',
   posted_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -35,6 +40,7 @@ CREATE TABLE IF NOT EXISTS settings (
   email text,
   address text,
   footer_text text,
+  search_prefix text DEFAULT 'Chơn Thành, Bình Phước',
   CONSTRAINT one_row CHECK (id = 1)
 );
 
@@ -45,6 +51,8 @@ CREATE TABLE IF NOT EXISTS leads (
   phone text NOT NULL,
   message text,
   property_id uuid REFERENCES properties(id) ON DELETE SET NULL,
+  source text,
+  admin_note text,
   is_read boolean DEFAULT false,
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
