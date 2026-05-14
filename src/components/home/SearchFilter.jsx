@@ -89,8 +89,8 @@ export default function SearchFilter({ onSearch }) {
         </button>
 
         {/* Desktop Filters Row (Visible on LG, conditional on Mobile) */}
-        <div className={`${isOpen ? "grid" : "hidden lg:grid"} grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(260px,1fr)_minmax(130px,160px)_minmax(130px,160px)_minmax(130px,160px)_minmax(130px,160px)_140px] xl:grid-cols-[minmax(320px,1fr)_minmax(150px,180px)_minmax(150px,180px)_minmax(150px,180px)_minmax(150px,180px)_150px] gap-4 items-end`}>
-          <div className="hidden lg:block min-w-0 relative group">
+        <div className={`${isOpen ? "grid" : "hidden lg:grid"} grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-[minmax(280px,1fr)_minmax(140px,170px)_minmax(140px,170px)_minmax(140px,170px)_minmax(140px,170px)_150px] gap-4 items-end`}>
+          <div className="hidden lg:block lg:col-span-2 xl:col-span-1 min-w-0 relative group">
             <label className={labelCls}>Tìm Kiếm Từ Khóa</label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-600 transition-colors" />
@@ -142,7 +142,7 @@ export default function SearchFilter({ onSearch }) {
           </div>
 
           {/* Action Buttons inside the row for Desktop, or full width on Mobile */}
-          <div className="flex items-center gap-2 w-full">
+          <div className="flex items-center gap-2 w-full sm:col-span-2 xl:col-span-1">
             {isFiltered && (
               <button
                 onClick={handleReset}
