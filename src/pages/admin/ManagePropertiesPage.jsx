@@ -138,8 +138,8 @@ export default function ManagePropertiesPage() {
   const fileInputRef = useRef(null);
   const legalFileInputRef = useRef(null);
 
-  useEffect(() => { 
-    loadProperties(); 
+  useEffect(() => {
+    loadProperties();
     loadSiteSettings();
   }, []);
 
@@ -201,7 +201,7 @@ export default function ManagePropertiesPage() {
         data.append("folder", "chonthanh_bds");
         const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, { method: "POST", body: data });
         const json = await res.json();
-        
+
         if (json.secure_url) {
           validUrls.push(json.secure_url);
         } else {
@@ -214,10 +214,10 @@ export default function ManagePropertiesPage() {
         setFormData(prev => ({ ...prev, images: [...prev.images, ...validUrls] }));
         toast.success("Đã tải xong ảnh thực tế!", { id: t });
       }
-    } catch (err) { 
-      toast.error("Lỗi kết nối Cloudinary", { id: t }); 
+    } catch (err) {
+      toast.error("Lỗi kết nối Cloudinary", { id: t });
     }
-    finally { 
+    finally {
       setUploading(false);
       e.target.value = "";
     }
@@ -247,7 +247,7 @@ export default function ManagePropertiesPage() {
         data.append("folder", "chonthanh_bds/phap_ly");
         const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, { method: "POST", body: data });
         const json = await res.json();
-        
+
         if (json.secure_url) {
           validUrls.push(json.secure_url);
         } else {
@@ -257,18 +257,18 @@ export default function ManagePropertiesPage() {
       }
 
       if (validUrls.length > 0) {
-        setFormData(prev => ({ 
-          ...prev, 
-          legal_images: [...(Array.isArray(prev.legal_images) ? prev.legal_images : []), ...validUrls] 
+        setFormData(prev => ({
+          ...prev,
+          legal_images: [...(Array.isArray(prev.legal_images) ? prev.legal_images : []), ...validUrls]
         }));
         toast.success("Đã tải xong ảnh sổ đỏ!", { id: t });
       } else {
         toast.error("Không có ảnh nào được tải lên", { id: t });
       }
-    } catch (err) { 
-      toast.error("Lỗi kết nối máy chủ upload", { id: t }); 
+    } catch (err) {
+      toast.error("Lỗi kết nối máy chủ upload", { id: t });
     }
-    finally { 
+    finally {
       setUploading(false);
       e.target.value = ""; // Reset input để có thể chọn lại cùng file đó nếu cần
     }
@@ -302,24 +302,22 @@ export default function ManagePropertiesPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.title || !formData.price || formData.images.length === 0) return toast.error("Thiếu thông tin bắt buộc");
+    if (!formData.title || !formData.price || formData.images.length === 0)
+      return toast.error("Thiếu thông tin bắt buộc (Tiêu đề, Giá, Ảnh)");
+
     setSubmitting(true);
-    const payload = {
-      ...formData,
-      price: Number(formData.price),
-      area: Number(formData.area),
-      formatted_price: formatPrice(formData.price),
-      formatted_area: formatArea(formData.area),
-      thumbnail_url: formData.images[0] || "",
-      tags: [formData.type, formData.legal_status, formData.is_featured ? "Nổi bật" : null].filter(Boolean)
-    };
+    // ✅ Truyền thẳng formData – api.js (propertyToDbPayload) sẽ lo normalize & clean
     try {
-      if (currentProperty) await updateProperty(currentProperty.id, payload);
-      else await createProperty(payload);
-      toast.success("Thành công!");
+      if (currentProperty) await updateProperty(currentProperty.id, formData);
+      else await createProperty(formData);
+      toast.success("✅ Lưu tin thành công!");
       setIsModalOpen(false);
       loadProperties();
-    } catch (err) { toast.error("Lỗi lưu dữ liệu"); }
+    } catch (err) {
+      // Hiển thị lỗi chi tiết từ Supabase để dễ debug
+      console.error("[handleSubmit] error:", err);
+      toast.error(`❌ Lỗi: ${err.message || "Không thể lưu dữ liệu"}`, { duration: 6000 });
+    }
     finally { setSubmitting(false); }
   };
 
@@ -336,14 +334,14 @@ export default function ManagePropertiesPage() {
   const handleGeocode = async () => {
     if (!formData.location) return toast.error("Vui lòng nhập địa chỉ trước!");
     const t = toast.loading("Đang phân tích địa chỉ...");
-    
+
     try {
       // 1. Dọn dẹp địa chỉ
       let fullAddress = formData.location;
-      
+
       // Lấy khu vực mặc định từ settings (White-label)
       const prefix = siteSettings?.search_prefix || "";
-      
+
       if (!fullAddress.toLowerCase().includes("việt nam")) {
         // Nếu địa chỉ chưa có tỉnh thành, tự động ghép thêm khu vực mặc định
         if (!fullAddress.toLowerCase().includes(prefix.split(',')[0].trim().toLowerCase())) {
@@ -405,22 +403,39 @@ export default function ManagePropertiesPage() {
   };
 
   const handleGetCurrentLocation = () => {
-    if (!navigator.geolocation) return toast.error("Trình duyệt không hỗ trợ GPS");
-    const t = toast.loading("Đang xác định vị trí của bạn...");
+    if (!navigator.geolocation) return toast.error("Trình duyệt không hỗ trợ định vị GPS");
+
+    const t = toast.loading("⏳ Đang xác định vị trí... (tối đa 30s)");
+
     navigator.geolocation.getCurrentPosition(
+      // ✅ Thành công
       (pos) => {
         const { latitude, longitude } = pos.coords;
         setFormData(prev => ({
           ...prev,
           coordinates: { lat: latitude, lng: longitude }
         }));
-        toast.success("Đã lấy vị trí hiện tại!", { id: t });
+        toast.success("📍 Đã lấy vị trí hiện tại!", { id: t });
       },
+      // ❌ Thất bại – phân biệt từng loại lỗi
       (err) => {
-        console.error(err);
-        toast.error("Không thể lấy vị trí. Hãy bật GPS!", { id: t });
+        console.error("Geolocation error:", err);
+        if (err.code === err.PERMISSION_DENIED) {
+          // Người dùng từ chối hoặc chưa bật quyền
+          toast.error(
+            "🔒 Bị chặn quyền định vị!\nHãy vào Cài đặt trình duyệt → Quyền riêng tư → Vị trí → Cho phép trang này.",
+            { id: t, duration: 6000 }
+          );
+        } else if (err.code === err.TIMEOUT) {
+          // Hết 30 giây không tìm được
+          toast.error("⏱️ Hết thời gian (30s). Vui lòng thử lại hoặc ghim thủ công trên bản đồ.", { id: t, duration: 5000 });
+        } else {
+          // Lỗi khác (POSITION_UNAVAILABLE – không có tín hiệu GPS)
+          toast.error("📡 Không bắt được tín hiệu GPS. Hãy bật vị trí trên thiết bị và thử lại!", { id: t, duration: 5000 });
+        }
       },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      // ⚙️ Cấu hình: timeout 30 giây, độ chính xác cao
+      { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
     );
   };
 
@@ -502,155 +517,155 @@ export default function ManagePropertiesPage() {
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !submitting && setIsModalOpen(false)} />
           <div className="relative w-full max-w-5xl bg-white rounded-[2rem] shadow-[0_0_50px_-12px_rgba(0,0,0,0.5)] flex flex-col max-h-[96vh] overflow-hidden animate-in fade-in zoom-in duration-300">
             <div className="px-8 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/30">
-               <h2 className="font-black text-gray-900 uppercase text-sm tracking-wider">{currentProperty ? "Sửa tin" : "Đăng tin mới"}</h2>
-               <button onClick={() => setIsModalOpen(false)} className="p-2 text-gray-400 hover:text-red-500 transition-colors"><X size={24} /></button>
+              <h2 className="font-black text-gray-900 uppercase text-sm tracking-wider">{currentProperty ? "Sửa tin" : "Đăng tin mới"}</h2>
+              <button onClick={() => setIsModalOpen(false)} className="p-2 text-gray-400 hover:text-red-500 transition-colors"><X size={24} /></button>
             </div>
             <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
-               <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-                <div className="md:col-span-7 space-y-5">
-                  <input name="title" value={formData.title} onChange={handleInputChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold" placeholder="Tiêu đề bắt mắt..." />
-                  <div className="grid grid-cols-2 gap-4">
-                    <input name="price" type="number" value={formData.price} onChange={handleInputChange} className="px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold" placeholder="Giá (VNĐ)" />
-                    <input name="area" type="number" value={formData.area} onChange={handleInputChange} className="px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold" placeholder="DT (m²)" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Vị trí thực tế *</label>
-                    <div className="flex gap-2">
-                      <input 
-                        name="location" 
-                        value={formData.location} 
-                        onChange={handleInputChange} 
-                        className="flex-1 px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold" 
-                        placeholder="VD: QL14, Minh Thành, Chơn Thành..." 
-                      />
-                      <div className="flex flex-col gap-2">
-                        <button 
-                          type="button" 
-                          onClick={handleGeocode}
-                          className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-black text-[9px] hover:bg-blue-100 transition-colors uppercase tracking-tight"
-                        >
-                          Tìm tọa độ
-                        </button>
-                        <button 
-                          type="button" 
-                          onClick={handleGetCurrentLocation}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-[9px] hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all flex items-center justify-center gap-1 uppercase tracking-tight"
-                        >
-                          📍 Vị trí hiện tại
-                        </button>
-                        <button 
-                          type="button" 
-                          onClick={handleReverseGeocode}
-                          className="px-4 py-2 bg-gray-50 text-gray-500 rounded-xl font-black text-[9px] hover:bg-gray-100 transition-colors uppercase tracking-tight"
-                        >
-                          Địa chỉ từ ghim
-                        </button>
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                  <div className="md:col-span-7 space-y-5">
+                    <input name="title" value={formData.title} onChange={handleInputChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold" placeholder="Tiêu đề bắt mắt..." />
+                    <div className="grid grid-cols-2 gap-4">
+                      <input name="price" type="number" value={formData.price} onChange={handleInputChange} className="px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold" placeholder="Giá (VNĐ)" />
+                      <input name="area" type="number" value={formData.area} onChange={handleInputChange} className="px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold" placeholder="DT (m²)" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Vị trí thực tế *</label>
+                      <div className="flex gap-2">
+                        <input
+                          name="location"
+                          value={formData.location}
+                          onChange={handleInputChange}
+                          className="flex-1 px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold"
+                          placeholder="VD: QL14, Minh Thành, Chơn Thành..."
+                        />
+                        <div className="flex flex-col gap-2">
+                          <button
+                            type="button"
+                            onClick={handleGeocode}
+                            className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-black text-[9px] hover:bg-blue-100 transition-colors uppercase tracking-tight"
+                          >
+                            Tìm tọa độ
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleGetCurrentLocation}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-[9px] hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all flex items-center justify-center gap-1 uppercase tracking-tight"
+                          >
+                            📍 Vị trí hiện tại
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleReverseGeocode}
+                            className="px-4 py-2 bg-gray-50 text-gray-500 rounded-xl font-black text-[9px] hover:bg-gray-100 transition-colors uppercase tracking-tight"
+                          >
+                            Địa chỉ từ ghim
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <select name="type" value={formData.type} onChange={handleInputChange} className="px-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold text-xs"><option>Đất nền</option><option>Đất vườn</option><option>Nhà phố</option></select>
-                    <select name="legal_status" value={formData.legal_status} onChange={handleInputChange} className="px-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold text-xs"><option>Sổ hồng riêng</option><option>Sổ đỏ</option></select>
-                    <select name="status" value={formData.status} onChange={handleInputChange} className="px-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold text-xs"><option>Đang bán</option><option>Đã bán</option></select>
-                  </div>
-                  <textarea name="description" rows={5} value={formData.description} onChange={handleInputChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold resize-none" placeholder="Mô tả ưu điểm..." />
-                  <div className="pt-2">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Vị trí trên bản đồ</span>
-                    <MapPicker lat={formData.coordinates.lat} lng={formData.coordinates.lng} onChange={c => setFormData(p => ({ ...p, coordinates: c }))} />
-                  </div>
-                </div>
-                <div className="md:col-span-5 space-y-4">
-                  {/* Khay Ảnh Thực Tế */}
-                  <div className="bg-gray-50/50 p-4 rounded-3xl border border-gray-100">
-                    <div className="flex justify-between items-center mb-3">
-                       <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Ảnh Thực tế ({formData.images.length}/{MAX_IMAGES})</span>
-                       <div className="flex gap-2">
-                         <button type="button" onClick={() => {
-                           const camInput = document.createElement('input');
-                           camInput.type = 'file';
-                           camInput.accept = 'image/*';
-                           camInput.capture = 'environment';
-                           camInput.onchange = (e) => handleUploadImages(e);
-                           camInput.click();
-                         }} className="text-[10px] font-black text-green-600 bg-green-50 px-2 py-1 rounded-md uppercase hover:bg-green-100">Chụp ảnh 📸</button>
-                         <button type="button" onClick={() => fileInputRef.current.click()} className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-md uppercase hover:bg-blue-100">Thêm ảnh +</button>
-                       </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <select name="type" value={formData.type} onChange={handleInputChange} className="px-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold text-xs"><option>Đất nền</option><option>Đất vườn</option><option>Nhà phố</option></select>
+                      <select name="legal_status" value={formData.legal_status} onChange={handleInputChange} className="px-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold text-xs"><option>Sổ hồng riêng</option><option>Sổ đỏ</option></select>
+                      <select name="status" value={formData.status} onChange={handleInputChange} className="px-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold text-xs"><option>Đang bán</option><option>Đã bán</option></select>
                     </div>
-                    <div className="max-h-40 overflow-y-auto pr-2 scrollbar-thin">
-                      <div className="grid grid-cols-4 gap-2">
-                         {formData.images.map((img, idx) => (
-                           <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-white shadow-sm group/img">
-                             <img src={img} className="w-full h-full object-cover" />
-                             <button 
-                               type="button"
-                               onClick={() => setFormData(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }))}
-                               className="absolute inset-0 bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
-                             >
-                               Xóa
-                             </button>
-                           </div>
-                         ))}
-                         {formData.images.length < MAX_IMAGES && (
-                           <button 
-                             type="button" 
-                             onClick={() => fileInputRef.current.click()}
-                             className="aspect-square border-2 border-dashed border-gray-200 rounded-xl flex items-center justify-center text-gray-300 hover:border-blue-300 hover:text-blue-500 transition-all"
-                           >
+                    <textarea name="description" rows={5} value={formData.description} onChange={handleInputChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold resize-none" placeholder="Mô tả ưu điểm..." />
+                    <div className="pt-2">
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Vị trí trên bản đồ</span>
+                      <MapPicker lat={formData.coordinates.lat} lng={formData.coordinates.lng} onChange={c => setFormData(p => ({ ...p, coordinates: c }))} />
+                    </div>
+                  </div>
+                  <div className="md:col-span-5 space-y-4">
+                    {/* Khay Ảnh Thực Tế */}
+                    <div className="bg-gray-50/50 p-4 rounded-3xl border border-gray-100">
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Ảnh Thực tế ({formData.images.length}/{MAX_IMAGES})</span>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => {
+                            const camInput = document.createElement('input');
+                            camInput.type = 'file';
+                            camInput.accept = 'image/*';
+                            camInput.capture = 'environment';
+                            camInput.onchange = (e) => handleUploadImages(e);
+                            camInput.click();
+                          }} className="text-[10px] font-black text-green-600 bg-green-50 px-2 py-1 rounded-md uppercase hover:bg-green-100">Chụp ảnh 📸</button>
+                          <button type="button" onClick={() => fileInputRef.current.click()} className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-md uppercase hover:bg-blue-100">Thêm ảnh +</button>
+                        </div>
+                      </div>
+                      <div className="max-h-40 overflow-y-auto pr-2 scrollbar-thin">
+                        <div className="grid grid-cols-4 gap-2">
+                          {formData.images.map((img, idx) => (
+                            <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-white shadow-sm group/img">
+                              <img src={img} className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => setFormData(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }))}
+                                className="absolute inset-0 bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
+                              >
+                                Xóa
+                              </button>
+                            </div>
+                          ))}
+                          {formData.images.length < MAX_IMAGES && (
+                            <button
+                              type="button"
+                              onClick={() => fileInputRef.current.click()}
+                              className="aspect-square border-2 border-dashed border-gray-200 rounded-xl flex items-center justify-center text-gray-300 hover:border-blue-300 hover:text-blue-500 transition-all"
+                            >
                               <Plus size={20} />
-                           </button>
-                         )}
+                            </button>
+                          )}
+                        </div>
                       </div>
+                      <input type="file" ref={fileInputRef} hidden multiple accept="image/*" onChange={handleUploadImages} />
                     </div>
-                    <input type="file" ref={fileInputRef} hidden multiple accept="image/*" onChange={handleUploadImages} />
-                  </div>
 
-                  {/* Khay Ảnh Pháp Lý */}
-                  <div className="bg-blue-50/30 p-4 rounded-3xl border border-blue-100">
-                    <div className="flex justify-between items-center mb-3">
-                       <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Ảnh Sổ đỏ (Bảo mật)</span>
-                       <button type="button" onClick={() => legalFileInputRef.current.click()} className="text-[10px] font-black text-blue-600 uppercase hover:underline">Thêm sổ +</button>
-                    </div>
-                    <div className="grid grid-cols-4 gap-2">
-                       {formData.legal_images && formData.legal_images.map((img, idx) => (
-                         <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-white shadow-sm group/leg">
-                           <img src={img} className="w-full h-full object-cover" />
-                           <button 
-                             type="button"
-                             onClick={() => setFormData(prev => ({ ...prev, legal_images: prev.legal_images.filter((_, i) => i !== idx) }))}
-                             className="absolute inset-0 bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover/leg:opacity-100 transition-opacity"
-                           >
-                             Xóa
-                           </button>
-                         </div>
-                       ))}
-                       {(formData.legal_images ? formData.legal_images.length : 0) < 5 && (
-                         <button 
-                           type="button" 
-                           onClick={() => legalFileInputRef.current.click()}
-                           className="aspect-square border-2 border-dashed border-blue-200 rounded-xl flex items-center justify-center text-blue-300 hover:border-blue-400"
-                         >
+                    {/* Khay Ảnh Pháp Lý */}
+                    <div className="bg-blue-50/30 p-4 rounded-3xl border border-blue-100">
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Ảnh Sổ đỏ (Bảo mật)</span>
+                        <button type="button" onClick={() => legalFileInputRef.current.click()} className="text-[10px] font-black text-blue-600 uppercase hover:underline">Thêm sổ +</button>
+                      </div>
+                      <div className="grid grid-cols-4 gap-2">
+                        {formData.legal_images && formData.legal_images.map((img, idx) => (
+                          <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-white shadow-sm group/leg">
+                            <img src={img} className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => setFormData(prev => ({ ...prev, legal_images: prev.legal_images.filter((_, i) => i !== idx) }))}
+                              className="absolute inset-0 bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover/leg:opacity-100 transition-opacity"
+                            >
+                              Xóa
+                            </button>
+                          </div>
+                        ))}
+                        {(formData.legal_images ? formData.legal_images.length : 0) < 5 && (
+                          <button
+                            type="button"
+                            onClick={() => legalFileInputRef.current.click()}
+                            className="aspect-square border-2 border-dashed border-blue-200 rounded-xl flex items-center justify-center text-blue-300 hover:border-blue-400"
+                          >
                             <Plus size={20} />
-                         </button>
-                       )}
+                          </button>
+                        )}
+                      </div>
+                      <input type="file" ref={legalFileInputRef} hidden multiple accept="image/*" onChange={handleUploadLegalImages} />
                     </div>
-                    <input type="file" ref={legalFileInputRef} hidden multiple accept="image/*" onChange={handleUploadLegalImages} />
-                  </div>
 
-                  <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 space-y-3">
-                     <span className="text-[9px] font-black text-gray-400 uppercase flex justify-between">Video giới thiệu <span className="text-blue-500">&lt; 50MB</span></span>
-                     <input name="video_url" value={formData.video_url} onChange={handleInputChange} className="w-full px-4 py-2 bg-white border border-blue-100 rounded-xl text-[10px] font-bold" placeholder="Dán link YouTube hoặc tải lên..." />
-                     <button type="button" onClick={() => document.getElementById('v-up').click()} className="w-full py-2 bg-white border border-dashed border-blue-200 rounded-xl text-[8px] font-black text-blue-600 uppercase tracking-widest">{uploading ? "Đang tải..." : "TẢI VIDEO LÊN"}</button>
-                     <input type="file" id="v-up" hidden accept="video/*" onChange={handleUploadVideo} />
-                  </div>
+                    <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 space-y-3">
+                      <span className="text-[9px] font-black text-gray-400 uppercase flex justify-between">Video giới thiệu <span className="text-blue-500">&lt; 50MB</span></span>
+                      <input name="video_url" value={formData.video_url} onChange={handleInputChange} className="w-full px-4 py-2 bg-white border border-blue-100 rounded-xl text-[10px] font-bold" placeholder="Dán link YouTube hoặc tải lên..." />
+                      <button type="button" onClick={() => document.getElementById('v-up').click()} className="w-full py-2 bg-white border border-dashed border-blue-200 rounded-xl text-[8px] font-black text-blue-600 uppercase tracking-widest">{uploading ? "Đang tải..." : "TẢI VIDEO LÊN"}</button>
+                      <input type="file" id="v-up" hidden accept="video/*" onChange={handleUploadVideo} />
+                    </div>
 
+                  </div>
                 </div>
               </div>
-               </div>
-               <div className="p-4 border-t flex justify-end gap-3 bg-white flex-shrink-0">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 font-bold text-gray-400">HỦY</button>
-                  <button type="submit" disabled={submitting || uploading} className="px-10 py-3 bg-blue-600 text-white rounded-xl font-black shadow-lg">LƯU TIN NGAY</button>
-               </div>
+              <div className="p-4 border-t flex justify-end gap-3 bg-white flex-shrink-0">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 font-bold text-gray-400">HỦY</button>
+                <button type="submit" disabled={submitting || uploading} className="px-10 py-3 bg-blue-600 text-white rounded-xl font-black shadow-lg">LƯU TIN NGAY</button>
+              </div>
             </form>
           </div>
         </div>,

@@ -9,6 +9,32 @@ import { supabase } from "../../utils/supabaseClient";
 import toast from "react-hot-toast";
 import * as XLSX from 'xlsx';
 
+const EXCEL_COLUMNS = [
+  { header: "STT", key: "index", width: 8 },
+  { header: "Tên khách hàng", key: "customerName", width: 24 },
+  { header: "Số điện thoại", key: "phone", width: 18 },
+  { header: "Nguồn", key: "source", width: 22 },
+  { header: "BĐS quan tâm", key: "propertyName", width: 36 },
+  { header: "Lời nhắn", key: "message", width: 48 },
+  { header: "Ghi chú admin", key: "adminNote", width: 32 },
+  { header: "Ngày gửi", key: "createdAt", width: 22 },
+  { header: "Trạng thái", key: "status", width: 16 },
+  { header: "Mã khách", key: "id", width: 38 },
+];
+
+const excelTimestamp = () => {
+  const pad = (value) => String(value).padStart(2, "0");
+  const now = new Date();
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+};
+
+const formatLeadDate = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("vi-VN");
+};
+
 export default function LeadsPage() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -77,29 +103,64 @@ export default function LeadsPage() {
     }
   };
 
-  const exportToExcel = () => {
-    const data = leads.map(l => ({
-      "Tên khách hàng": l.customer_name,
-      "Số điện thoại": l.phone,
-      "Ghi chú/Lời nhắn": l.message,
-      "Căn BĐS quan tâm": l.properties?.title || "Trang chủ",
-      "Ngày gửi": new Date(l.created_at).toLocaleString("vi-VN"),
-      "Trạng thái": l.is_read ? "Đã đọc" : "Khách mới"
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "DanhSachKhach");
-    XLSX.writeFile(wb, `KhachHang_${new Date().getTime()}.xlsx`);
-    toast.success("Đã xuất file Excel!");
-  };
-
-  const filtered = leads.filter(l => {
+  const getFilteredLeads = () => leads.filter(l => {
     const matchSearch = (l.customer_name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (l.phone || "").includes(searchTerm);
     if (filter === "new") return matchSearch && !l.is_read;
     if (filter === "read") return matchSearch && l.is_read;
     return matchSearch;
   });
+
+  const exportToExcel = () => {
+    const exportLeads = getFilteredLeads();
+    if (exportLeads.length === 0) {
+      toast.error("Không có khách hàng nào để xuất Excel");
+      return;
+    }
+
+    const data = exportLeads.map((l, index) => ({
+      "STT": index + 1,
+      "Tên khách hàng": l.customer_name || "",
+      "Số điện thoại": l.phone ? String(l.phone) : "",
+      "Nguồn": l.source || "Website",
+      "BĐS quan tâm": l.properties?.title || l.propertyName || "Trang chủ",
+      "Lời nhắn": l.message || "",
+      "Ghi chú admin": l.admin_note || l.adminNote || "",
+      "Ngày gửi": formatLeadDate(l.created_at || l.createdAt),
+      "Trạng thái": l.is_read ? "Đã đọc" : "Khách mới",
+      "Mã khách": l.id || "",
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws["!cols"] = EXCEL_COLUMNS.map(col => ({ wch: col.width }));
+    ws["!autofilter"] = {
+      ref: XLSX.utils.encode_range({
+        s: { r: 0, c: 0 },
+        e: { r: data.length, c: EXCEL_COLUMNS.length - 1 },
+      }),
+    };
+
+    for (let row = 2; row <= data.length + 1; row += 1) {
+      const cell = ws[`C${row}`];
+      if (cell) {
+        cell.t = "s";
+        cell.z = "@";
+      }
+    }
+
+    const wb = XLSX.utils.book_new();
+    wb.Props = {
+      Title: "Danh sách khách hàng",
+      Subject: "Leads BĐS",
+      Author: "BĐS Chơn Thành Admin",
+      CreatedDate: new Date(),
+    };
+    XLSX.utils.book_append_sheet(wb, ws, "KhachHang");
+    XLSX.writeFile(wb, `KhachHang_${excelTimestamp()}.xlsx`);
+    toast.success(`Đã xuất ${exportLeads.length} khách hàng ra Excel`);
+  };
+
+  const filtered = getFilteredLeads();
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500 pb-10">
