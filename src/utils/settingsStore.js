@@ -14,6 +14,7 @@ const DEFAULT_SETTINGS = normalizeSettings({
   site_title: "BĐS Chơn Thành",
   footer_text: "© 2026 BĐS Chơn Thành. Thiết kế và vận hành bởi Admin Team.",
   search_prefix: "Chơn Thành, Bình Phước",
+  office_coordinates: { lat: 11.424, lng: 106.5962 },
 });
 
 let cachedSettings = DEFAULT_SETTINGS;

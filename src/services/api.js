@@ -223,6 +223,7 @@ export function normalizeSettings(row = {}) {
     footerText,
     search_prefix: searchPrefix,
     searchPrefix,
+    office_coordinates: normalizeCoordinates(row.office_coordinates ?? row.officeCoordinates),
   };
 }
 
@@ -239,6 +240,7 @@ function settingsToDbPayload(payload = {}) {
     address: settings.address,
     footer_text: settings.footer_text,
     search_prefix: settings.search_prefix,
+    office_coordinates: settings.office_coordinates,
   };
 }
 

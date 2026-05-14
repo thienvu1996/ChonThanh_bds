@@ -76,6 +76,8 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS footer_text text;
 ALTER TABLE settings
 ADD COLUMN IF NOT EXISTS search_prefix text DEFAULT 'Chơn Thành, Bình Phước';
 
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS office_coordinates jsonb DEFAULT '{"lat": 11.424, "lng": 106.5962}'::jsonb;
+
 -- ===== LEADS =====
 CREATE TABLE IF NOT EXISTS leads (
     id uuid DEFAULT gen_random_uuid () PRIMARY KEY,

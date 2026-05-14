@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
-import { 
-  Settings as SettingsIcon, Save, Globe, Phone, Mail, 
-  MapPin, Image as ImageIcon, Layout, Shield, 
-  RefreshCcw, Check, Sparkles, Camera, Plus
+import {
+  Settings as SettingsIcon, Save, Globe, Phone, Mail,
+  MapPin, Image as ImageIcon, Layout, Shield,
+  RefreshCcw, Check, Sparkles, Camera, Plus, Navigation
 } from "lucide-react";
 import {
   fetchSettings,
@@ -13,6 +13,7 @@ import {
   setActiveSiteId,
 } from "../../services/api";
 import { saveSettings } from "../../utils/settingsStore";
+import MapPicker from "../../components/common/MapPicker";
 import toast from "react-hot-toast";
 
 const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
@@ -29,7 +30,8 @@ export default function SettingsPage() {
     email: "",
     address: "",
     footer_text: "",
-    search_prefix: ""
+    search_prefix: "",
+    office_coordinates: { lat: 11.424, lng: 106.5962 }
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -119,6 +121,48 @@ export default function SettingsPage() {
     }
   };
 
+  // ---- Geocoding Core ----
+  const geocodeAddress = async (locationStr) => {
+    if (!locationStr) return null;
+    const prefix = settings?.search_prefix || "Chơn Thành, Bình Phước";
+    let fullAddress = locationStr;
+    if (!fullAddress.toLowerCase().includes("việt nam")) {
+      if (!fullAddress.toLowerCase().includes(prefix.split(',')[0].trim().toLowerCase())) {
+        fullAddress += `, ${prefix}`;
+      }
+      fullAddress += ", Việt Nam";
+    }
+    const search = async (q) => {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`);
+      return res.json();
+    };
+    let data = await search(fullAddress);
+    if (!data?.length) {
+      const parts = locationStr.split(',');
+      if (parts.length > 2) data = await search(parts.slice(Math.floor(parts.length / 2)).join(','));
+    }
+    if (data?.length) {
+      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    }
+    return null;
+  };
+
+  const handleAutoGeocode = async () => {
+    if (!settings.address) return;
+    const t = toast.loading("Đang tìm vị trí địa chỉ văn phòng...");
+    try {
+      const coords = await geocodeAddress(settings.address);
+      if (coords) {
+        setSettings(prev => ({ ...prev, office_coordinates: coords }));
+        toast.success("📍 Đã tìm thấy vị trí văn phòng!", { id: t });
+      } else {
+        toast.error("Không tìm thấy vị trí tự động", { id: t });
+      }
+    } catch {
+      toast.error("Lỗi kết nối bản đồ", { id: t });
+    }
+  };
+
   const handleUploadBanner = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -134,7 +178,7 @@ export default function SettingsPage() {
       const data = new FormData();
       data.append("file", file);
       data.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-      
+
       const res = await fetch(
         `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
         { method: "POST", body: data }
@@ -173,14 +217,14 @@ export default function SettingsPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-100">
-             <SettingsIcon size={24} />
+            <SettingsIcon size={24} />
           </div>
           <div>
             <h1 className="text-2xl font-black text-gray-900 tracking-tight">Cấu Hình Website</h1>
             <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-0.5">Quản lý nội dung & Thông tin liên hệ</p>
           </div>
         </div>
-        <button 
+        <button
           onClick={handleSubmit}
           disabled={saving}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-2xl font-black shadow-xl shadow-blue-100 transition-all hover:-translate-y-1 active:scale-95 disabled:opacity-50"
@@ -260,41 +304,41 @@ export default function SettingsPage() {
             <Layout size={20} />
             <h2 className="font-black uppercase tracking-widest text-sm">Hình ảnh Banner chính</h2>
           </div>
-          
+
           <div className="relative group aspect-[21/9] rounded-3xl overflow-hidden bg-gray-100 border-4 border-gray-50 shadow-inner">
-             {settings.banner_url ? (
-               <img src={settings.banner_url} className="w-full h-full object-cover" alt="Banner" />
-             ) : (
-               <div className="w-full h-full flex flex-col items-center justify-center text-gray-300">
-                  <ImageIcon size={48} strokeWidth={1} />
-                  <p className="font-bold text-xs uppercase tracking-widest mt-2">Chưa có banner</p>
-               </div>
-             )}
-             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <button onClick={() => bannerInputRef.current.click()} className="flex items-center gap-2 bg-white text-black px-6 py-3 rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-transform">
-                   <Camera size={18} /> THAY ĐỔI ẢNH
-                </button>
-             </div>
-             {uploading && (
-               <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center">
-                  <div className="flex flex-col items-center gap-2">
-                     <RefreshCcw className="text-blue-600 animate-spin" size={32} />
-                     <p className="font-black text-blue-600 text-[10px] uppercase tracking-widest">Đang tải lên...</p>
-                  </div>
-               </div>
-             )}
+            {settings.banner_url ? (
+              <img src={settings.banner_url} className="w-full h-full object-cover" alt="Banner" />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center text-gray-300">
+                <ImageIcon size={48} strokeWidth={1} />
+                <p className="font-bold text-xs uppercase tracking-widest mt-2">Chưa có banner</p>
+              </div>
+            )}
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <button onClick={() => bannerInputRef.current.click()} className="flex items-center gap-2 bg-white text-black px-6 py-3 rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-transform">
+                <Camera size={18} /> THAY ĐỔI ẢNH
+              </button>
+            </div>
+            {uploading && (
+              <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center">
+                <div className="flex flex-col items-center gap-2">
+                  <RefreshCcw className="text-blue-600 animate-spin" size={32} />
+                  <p className="font-black text-blue-600 text-[10px] uppercase tracking-widest">Đang tải lên...</p>
+                </div>
+              </div>
+            )}
           </div>
           <input type="file" ref={bannerInputRef} hidden accept="image/*" onChange={handleUploadBanner} />
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-             <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Tiêu đề lớn (Hero Title)</label>
-                <input name="hero_title" value={settings.hero_title} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-sm focus:ring-4 focus:ring-blue-50 transition-all" />
-             </div>
-             <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Mô tả ngắn (Hero Subtitle)</label>
-                <input name="hero_subtitle" value={settings.hero_subtitle} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-sm focus:ring-4 focus:ring-blue-50 transition-all" />
-             </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Tiêu đề lớn (Hero Title)</label>
+              <input name="hero_title" value={settings.hero_title} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-sm focus:ring-4 focus:ring-blue-50 transition-all" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Mô tả ngắn (Hero Subtitle)</label>
+              <input name="hero_subtitle" value={settings.hero_subtitle} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-sm focus:ring-4 focus:ring-blue-50 transition-all" />
+            </div>
           </div>
         </section>
 
@@ -305,30 +349,57 @@ export default function SettingsPage() {
             <h2 className="font-black uppercase tracking-widest text-sm">Thông tin Website & Liên hệ</h2>
           </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Tên Website</label>
-              <input name="site_title" value={settings.site_title} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 text-blue-600">Khu vực tìm kiếm mặc định (X, Y)</label>
-              <input name="search_prefix" value={settings.search_prefix} onChange={handleChange} className="w-full px-5 py-4 bg-blue-50/30 border border-blue-100 rounded-2xl outline-none font-bold text-blue-700" placeholder="VD: Lộc Ninh, Bình Phước" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Số điện thoại Hotline</label>
-              <input name="phone" value={settings.phone} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-blue-600" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Số Zalo liên hệ</label>
-              <input name="zalo" value={settings.zalo} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-blue-600" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email hỗ trợ</label>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Tên Website</label>
+            <input name="site_title" value={settings.site_title} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 text-blue-600">Khu vực tìm kiếm mặc định (X, Y)</label>
+            <input name="search_prefix" value={settings.search_prefix} onChange={handleChange} className="w-full px-5 py-4 bg-blue-50/30 border border-blue-100 rounded-2xl outline-none font-bold text-blue-700" placeholder="VD: Lộc Ninh, Bình Phước" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Số điện thoại Hotline</label>
+            <input name="phone" value={settings.phone} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-blue-600" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Số Zalo liên hệ</label>
+            <input name="zalo" value={settings.zalo} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-blue-600" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email hỗ trợ</label>
             <input name="email" value={settings.email} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold" />
-            </div>
+          </div>
 
           <div className="space-y-2">
             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Địa chỉ văn phòng</label>
-            <input name="address" value={settings.address} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold" />
+            <div className="flex gap-2">
+              <input
+                name="address"
+                value={settings.address}
+                onChange={handleChange}
+                onBlur={handleAutoGeocode}
+                className="flex-1 px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold"
+                placeholder="Nhập địa chỉ văn phòng..."
+              />
+              <button
+                type="button"
+                onClick={handleAutoGeocode}
+                className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-black text-[9px] hover:bg-blue-100 transition-colors uppercase tracking-tight"
+              >
+                <Navigation size={14} className="inline mr-1" /> Định vị
+              </button>
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Vị trí văn phòng trên bản đồ</label>
+            <MapPicker
+              lat={settings.office_coordinates?.lat || 11.424}
+              lng={settings.office_coordinates?.lng || 106.5962}
+              onChange={c => setSettings(p => ({ ...p, office_coordinates: c }))}
+              height={250}
+            />
+            <p className="mt-2 text-[9px] text-gray-400 font-medium italic">💡 Bạn có thể di chuyển ghim hoặc click trực tiếp vào bản đồ để chọn vị trí chính xác.</p>
           </div>
 
           <div className="space-y-2">
@@ -339,13 +410,13 @@ export default function SettingsPage() {
 
         {/* Security Info */}
         <div className="bg-blue-50/50 rounded-3xl p-6 border border-blue-100 flex items-start gap-4">
-           <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 flex-shrink-0">
-              <Shield size={20} />
-           </div>
-           <div>
-              <p className="text-xs font-black text-blue-900 uppercase tracking-widest">⚠️ Lưu ý bảo mật</p>
-              <p className="text-xs text-blue-600/70 font-medium mt-1 leading-relaxed">Mọi thay đổi tại đây sẽ ảnh hưởng trực tiếp đến giao diện hiển thị cho khách hàng trên toàn bộ hệ thống. Vui lòng kiểm tra kỹ số điện thoại và thông tin liên hệ trước khi Lưu.</p>
-           </div>
+          <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 flex-shrink-0">
+            <Shield size={20} />
+          </div>
+          <div>
+            <p className="text-xs font-black text-blue-900 uppercase tracking-widest">⚠️ Lưu ý bảo mật</p>
+            <p className="text-xs text-blue-600/70 font-medium mt-1 leading-relaxed">Mọi thay đổi tại đây sẽ ảnh hưởng trực tiếp đến giao diện hiển thị cho khách hàng trên toàn bộ hệ thống. Vui lòng kiểm tra kỹ số điện thoại và thông tin liên hệ trước khi Lưu.</p>
+          </div>
         </div>
       </div>
     </div>

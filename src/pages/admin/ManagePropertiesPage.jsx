@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   Plus, Search, Pencil, Trash2, X, Image as ImageIcon,
@@ -6,6 +6,7 @@ import {
   MapPin, Star, Tag, Ruler, FileText, DollarSign, Download, FileJson, Video
 } from "lucide-react";
 import { fetchProperties, createProperty, updateProperty, deleteProperty, fetchSettings } from "../../services/api";
+import MapPicker from "../../components/common/MapPicker";
 import toast from "react-hot-toast";
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -29,6 +30,7 @@ const EMPTY_FORM = {
   title: "", price: "", area: "", frontage: "", location: "",
   type: "Đất nền", status: "Đang bán", legal_status: "Sổ hồng riêng",
   description: "", images: [], legal_images: [], video_url: "", is_featured: false,
+  thumbnail_url: "",
   coordinates: { lat: 11.424, lng: 106.5962 },
 };
 
@@ -39,89 +41,6 @@ const MAX_IMAGES = 10;
 
 const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-
-// ---------- MapPicker Component ----------
-function MapPicker({ lat, lng, onChange }) {
-  const mapRef = useRef(null);
-  const instanceRef = useRef(null);
-  const markerRef = useRef(null);
-  const isInternalChange = useRef(false);
-
-  useEffect(() => {
-    if (!document.getElementById("leaflet-css")) {
-      const link = document.createElement("link");
-      link.id = "leaflet-css";
-      link.rel = "stylesheet";
-      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-      document.head.appendChild(link);
-    }
-
-    const loadLeaflet = (cb) => {
-      if (window.L) return cb(window.L);
-      const script = document.createElement("script");
-      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-      script.onload = () => cb(window.L);
-      document.body.appendChild(script);
-    };
-
-    loadLeaflet((L) => {
-      if (instanceRef.current || !mapRef.current) return;
-      const map = L.map(mapRef.current).setView([lat, lng], 15);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "© OpenStreetMap",
-      }).addTo(map);
-
-      const icon = L.divIcon({
-        className: "",
-        html: `<div style="width:28px;height:28px;background:#2563eb;border:3px solid white;border-radius:50%;box-shadow:0 2px 8px #0004;display:flex;align-items:center;justify-content:center;">
-          <div style="width:8px;height:8px;background:white;border-radius:50%;"></div></div>`,
-        iconAnchor: [14, 14],
-      });
-
-      const marker = L.marker([lat, lng], { draggable: true, icon }).addTo(map);
-      markerRef.current = marker;
-      instanceRef.current = map;
-
-      marker.on("dragend", () => {
-        const { lat: newLat, lng: newLng } = marker.getLatLng();
-        isInternalChange.current = true;
-        onChange({ lat: parseFloat(newLat.toFixed(6)), lng: parseFloat(newLng.toFixed(6)) });
-      });
-
-      map.on("click", (e) => {
-        marker.setLatLng([e.latlng.lat, e.latlng.lng]);
-        isInternalChange.current = true;
-        onChange({ lat: e.latlng.lat, lng: e.latlng.lng });
-      });
-    });
-
-    return () => {
-      if (instanceRef.current) {
-        instanceRef.current.remove();
-        instanceRef.current = null;
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!markerRef.current || !instanceRef.current) return;
-    if (isInternalChange.current) {
-      isInternalChange.current = false;
-      return;
-    }
-    markerRef.current.setLatLng([lat, lng]);
-    instanceRef.current.flyTo([lat, lng], 15);
-  }, [lat, lng]);
-
-  return (
-    <div className="relative">
-      <div ref={mapRef} style={{ height: 200, borderRadius: 16 }} className="border border-gray-100 overflow-hidden" />
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur px-3 py-1 rounded-full shadow-sm text-[9px] font-black text-blue-600 border border-blue-50 whitespace-nowrap">
-        📍 {lat.toFixed(5)}, {lng.toFixed(5)}
-      </div>
-    </div>
-  );
-}
 
 // ---------- Main Component ----------
 export default function ManagePropertiesPage() {
@@ -162,7 +81,33 @@ export default function ManagePropertiesPage() {
   const handleOpenModal = (property = null) => {
     if (property) {
       setCurrentProperty(property);
-      setFormData({ ...EMPTY_FORM, ...property });
+      const imgs = Array.isArray(property.images) ? property.images : [];
+      const loadedData = {
+        ...EMPTY_FORM,
+        ...property,
+        thumbnail_url: property.thumbnail_url || imgs[0] || "",
+      };
+      setFormData(loadedData);
+
+      // Auto-geocode nếu coordinates vẫn là mặc định và có địa chỉ
+      const DEFAULT_LAT = 11.424;
+      const DEFAULT_LNG = 106.5962;
+      const coords = property.coordinates;
+      const isDefault = !coords ||
+        (Math.abs(coords.lat - DEFAULT_LAT) < 0.001 && Math.abs(coords.lng - DEFAULT_LNG) < 0.001);
+
+      if (isDefault && property.location) {
+        // Geocode sau khi state cập nhật (delay nhỏ)
+        setTimeout(async () => {
+          try {
+            const newCoords = await geocodeAddress(property.location);
+            if (newCoords) {
+              setFormData(prev => ({ ...prev, coordinates: newCoords }));
+              toast.success("📍 Đã cập nhật vị trí theo địa chỉ!", { duration: 3000 });
+            }
+          } catch { /* silent fail */ }
+        }, 400);
+      }
     } else {
       setCurrentProperty(null);
       setFormData({ ...EMPTY_FORM });
@@ -330,55 +275,45 @@ export default function ManagePropertiesPage() {
     } catch (e) { toast.error("Lỗi xóa"); }
   };
 
-  // ----- Tự động tìm tọa độ (Geocoding) thông minh -----
+  // ---- Hàm geocode core (nhận location string, trả về {lat, lng} hoặc null) ----
+  const geocodeAddress = async (locationStr) => {
+    if (!locationStr) return null;
+    const prefix = siteSettings?.search_prefix || "Chơn Thành, Bình Phước";
+    let fullAddress = locationStr;
+    if (!fullAddress.toLowerCase().includes("việt nam")) {
+      if (!fullAddress.toLowerCase().includes(prefix.split(',')[0].trim().toLowerCase())) {
+        fullAddress += `, ${prefix}`;
+      }
+      fullAddress += ", Việt Nam";
+    }
+    const search = async (q) => {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`);
+      return res.json();
+    };
+    let data = await search(fullAddress);
+    if (!data?.length) {
+      const parts = locationStr.split(',');
+      if (parts.length > 2) data = await search(parts.slice(Math.floor(parts.length / 2)).join(','));
+    }
+    if (data?.length) {
+      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    }
+    return null;
+  };
+
+  // ----- Geocoding thủ công (user bấm nút / onBlur) -----
   const handleGeocode = async () => {
     if (!formData.location) return toast.error("Vui lòng nhập địa chỉ trước!");
     const t = toast.loading("Đang phân tích địa chỉ...");
-
     try {
-      // 1. Dọn dẹp địa chỉ
-      let fullAddress = formData.location;
-
-      // Lấy khu vực mặc định từ settings (White-label)
-      const prefix = siteSettings?.search_prefix || "";
-
-      if (!fullAddress.toLowerCase().includes("việt nam")) {
-        // Nếu địa chỉ chưa có tỉnh thành, tự động ghép thêm khu vực mặc định
-        if (!fullAddress.toLowerCase().includes(prefix.split(',')[0].trim().toLowerCase())) {
-          fullAddress += `, ${prefix}`;
-        }
-        fullAddress += ", Việt Nam";
-      }
-
-      // Hàm tìm kiếm thực tế
-      const searchAddress = async (query) => {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&addressdetails=1`);
-        return await res.json();
-      }
-
-      // Thử tìm địa chỉ đầy đủ
-      let data = await searchAddress(fullAddress);
-
-      // Nếu không thấy, thử rút gọn (bỏ bớt các dấu phẩy đầu tiên - thường là số nhà)
-      if (!data || data.length === 0) {
-        const parts = formData.location.split(',');
-        if (parts.length > 2) {
-          const simplified = parts.slice(Math.floor(parts.length / 2)).join(',');
-          data = await searchAddress(simplified);
-        }
-      }
-
-      if (data && data.length > 0) {
-        const { lat, lon } = data[0];
-        setFormData(prev => ({
-          ...prev,
-          coordinates: { lat: parseFloat(lat), lng: parseFloat(lon) }
-        }));
+      const coords = await geocodeAddress(formData.location);
+      if (coords) {
+        setFormData(prev => ({ ...prev, coordinates: coords }));
         toast.success("Đã định vị thành công!", { id: t });
       } else {
         toast.error("Không tìm thấy! Thử nhập: 'Tên đường, Phường, Tỉnh'", { id: t });
       }
-    } catch (err) {
+    } catch {
       toast.error("Dịch vụ bản đồ đang bận, thử lại sau!", { id: t });
     }
   };
@@ -402,41 +337,64 @@ export default function ManagePropertiesPage() {
     }
   };
 
-  const handleGetCurrentLocation = () => {
-    if (!navigator.geolocation) return toast.error("Trình duyệt không hỗ trợ định vị GPS");
+  const getLocationErrorMessage = (err) => {
+    if (err?.code === err?.PERMISSION_DENIED || err?.code === 1) {
+      return "Chưa bật quyền định vị. Hãy cho phép vị trí cho trang này trong trình duyệt rồi bấm thử lại.";
+    }
+    if (err?.code === err?.TIMEOUT || err?.code === 3) {
+      return "Quá 30 giây vẫn chưa tìm được vị trí. Hãy bật GPS/vị trí trên thiết bị hoặc ghim thủ công trên bản đồ.";
+    }
+    return "Không bắt được tín hiệu vị trí. Hãy bật GPS/vị trí trên thiết bị và thử lại.";
+  };
 
-    const t = toast.loading("⏳ Đang xác định vị trí... (tối đa 30s)");
+  const requestCurrentPosition = () => new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true,
+      timeout: 30000,
+      maximumAge: 0,
+    });
+  });
 
-    navigator.geolocation.getCurrentPosition(
-      // ✅ Thành công
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        setFormData(prev => ({
-          ...prev,
-          coordinates: { lat: latitude, lng: longitude }
-        }));
-        toast.success("📍 Đã lấy vị trí hiện tại!", { id: t });
-      },
-      // ❌ Thất bại – phân biệt từng loại lỗi
-      (err) => {
-        console.error("Geolocation error:", err);
-        if (err.code === err.PERMISSION_DENIED) {
-          // Người dùng từ chối hoặc chưa bật quyền
-          toast.error(
-            "🔒 Bị chặn quyền định vị!\nHãy vào Cài đặt trình duyệt → Quyền riêng tư → Vị trí → Cho phép trang này.",
-            { id: t, duration: 6000 }
-          );
-        } else if (err.code === err.TIMEOUT) {
-          // Hết 30 giây không tìm được
-          toast.error("⏱️ Hết thời gian (30s). Vui lòng thử lại hoặc ghim thủ công trên bản đồ.", { id: t, duration: 5000 });
-        } else {
-          // Lỗi khác (POSITION_UNAVAILABLE – không có tín hiệu GPS)
-          toast.error("📡 Không bắt được tín hiệu GPS. Hãy bật vị trí trên thiết bị và thử lại!", { id: t, duration: 5000 });
+  const handleGetCurrentLocation = async () => {
+    if (!navigator.geolocation) {
+      toast.error("Trình duyệt không hỗ trợ định vị GPS");
+      return;
+    }
+
+    const isLocalhost = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+    if (window.location.protocol !== "https:" && !isLocalhost) {
+      toast.error("Trình duyệt chỉ cho lấy vị trí trên HTTPS hoặc localhost.");
+      return;
+    }
+
+    const t = toast.loading("Đang xin quyền và tìm vị trí hiện tại... tối đa 30s");
+
+    try {
+      if (navigator.permissions?.query) {
+        const permission = await navigator.permissions.query({ name: "geolocation" });
+        if (permission.state === "denied") {
+          toast.error("Quyền định vị đang bị chặn. Mở cài đặt trình duyệt và cho phép vị trí cho trang này.", {
+            id: t,
+            duration: 7000,
+          });
+          return;
         }
-      },
-      // ⚙️ Cấu hình: timeout 30 giây, độ chính xác cao
-      { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
-    );
+      }
+
+      const pos = await requestCurrentPosition();
+      const { latitude, longitude } = pos.coords;
+      setFormData(prev => ({
+        ...prev,
+        coordinates: {
+          lat: parseFloat(latitude.toFixed(6)),
+          lng: parseFloat(longitude.toFixed(6)),
+        },
+      }));
+      toast.success("Đã lấy vị trí hiện tại", { id: t });
+    } catch (err) {
+      console.error("Geolocation error:", err);
+      toast.error(getLocationErrorMessage(err), { id: t, duration: 7000 });
+    }
   };
 
   const exportToExcel = () => {
@@ -536,8 +494,9 @@ export default function ManagePropertiesPage() {
                           name="location"
                           value={formData.location}
                           onChange={handleInputChange}
+                          onBlur={handleGeocode}
                           className="flex-1 px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold"
-                          placeholder="VD: QL14, Minh Thành, Chơn Thành..."
+                          placeholder="Nhập địa chỉ → bản đồ tự cập nhật..."
                         />
                         <div className="flex flex-col gap-2">
                           <button
@@ -592,20 +551,51 @@ export default function ManagePropertiesPage() {
                           <button type="button" onClick={() => fileInputRef.current.click()} className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-md uppercase hover:bg-blue-100">Thêm ảnh +</button>
                         </div>
                       </div>
+                      {/* Hướng dẫn chọn thumbnail */}
+                      {formData.images.length > 0 && (
+                        <p className="text-[9px] text-blue-400 font-bold mb-2 ml-1">👑 Click vào ảnh để chọn làm ảnh đại diện</p>
+                      )}
                       <div className="max-h-40 overflow-y-auto pr-2 scrollbar-thin">
                         <div className="grid grid-cols-4 gap-2">
-                          {formData.images.map((img, idx) => (
-                            <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-white shadow-sm group/img">
-                              <img src={img} className="w-full h-full object-cover" />
-                              <button
-                                type="button"
-                                onClick={() => setFormData(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }))}
-                                className="absolute inset-0 bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
+                          {formData.images.map((img, idx) => {
+                            const isThumb = (formData.thumbnail_url || formData.images[0]) === img;
+                            return (
+                              <div
+                                key={idx}
+                                className={`relative aspect-square rounded-xl overflow-hidden shadow-sm group/img cursor-pointer transition-all ${isThumb
+                                  ? "ring-2 ring-blue-500 ring-offset-1"
+                                  : "border border-white"
+                                  }`}
+                                onClick={() => setFormData(prev => ({ ...prev, thumbnail_url: img }))}
                               >
-                                Xóa
-                              </button>
-                            </div>
-                          ))}
+                                <img src={img} className="w-full h-full object-cover" />
+                                {/* Badge thumbnail */}
+                                {isThumb && (
+                                  <div className="absolute top-1 left-1 bg-blue-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full leading-none">
+                                    👑
+                                  </div>
+                                )}
+                                {/* Nút xóa khi hover */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // không trigger chọn thumbnail
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      images: prev.images.filter((_, i) => i !== idx),
+                                      // Nếu xóa ảnh đang là thumbnail → reset về ảnh đầu tiên còn lại
+                                      thumbnail_url: prev.thumbnail_url === img
+                                        ? (prev.images.filter((_, i) => i !== idx)[0] || "")
+                                        : prev.thumbnail_url,
+                                    }));
+                                  }}
+                                  className="absolute inset-0 bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity text-xs font-bold"
+                                >
+                                  Xóa
+                                </button>
+                              </div>
+                            );
+                          })}
                           {formData.images.length < MAX_IMAGES && (
                             <button
                               type="button"

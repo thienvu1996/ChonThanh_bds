@@ -9,8 +9,6 @@ import { submitLead } from "../services/api";
 import { getSettings } from "../utils/settingsStore";
 import toast from "react-hot-toast";
 
-const OFFICE_COORDINATES = { lat: 11.4240, lng: 106.5962 };
-
 const NEEDS = [
   "Mua đất nền",
   "Mua nhà ở",
@@ -114,7 +112,7 @@ export default function ContactPage() {
                     value={form.phone}
                     onChange={handleChange}
                     placeholder="0901 234 567"
-                    className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition bg-gray-50"
+                    className="w-full border border-gray-100 rounded-lg px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition bg-gray-50"
                   />
                 </div>
 
@@ -127,7 +125,7 @@ export default function ContactPage() {
                     name="need"
                     value={form.need}
                     onChange={handleChange}
-                    className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition bg-gray-50"
+                    className="w-full border border-gray-100 rounded-lg px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition bg-gray-50"
                   >
                     <option value="">-- Chọn nhu cầu --</option>
                     {NEEDS.map((n) => <option key={n} value={n}>{n}</option>)}
@@ -198,8 +196,9 @@ export default function ContactPage() {
                 Vị trí văn phòng
               </p>
               <PropertyMap
-                coordinates={OFFICE_COORDINATES}
+                coordinates={settings.office_coordinates}
                 title="Văn phòng BĐS Chơn Thành"
+                address={settings.address}
               />
             </div>
           </div>
