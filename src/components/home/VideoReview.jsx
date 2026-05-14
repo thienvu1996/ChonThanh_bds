@@ -1,41 +1,18 @@
 // src/components/home/VideoReview.jsx
-// Section "Video Review Đất" – hỗ trợ 2 loại:
-//   1. YouTube: truyền youtubeId  (ví dụ: "dQw4w9WgXcQ")
-//   2. Video local: truyền videoUrl (ví dụ: "/videos/review-dat.mp4")
-//      → Đặt file video trong thư mục public/videos/
-
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Play, Youtube, Video } from "lucide-react";
+import { fetchProperties } from "../../services/api";
 
-// Danh sách video mặc định – đổi youtubeId hoặc videoUrl theo thực tế
-const DEFAULT_VIDEOS = [
-  {
-    id: "v1",
-    youtubeId: "dQw4w9WgXcQ", // ← thay bằng YouTube ID thật
-    title: "Review đất nền trung tâm Chơn Thành – 150m² sổ hồng",
-    subtitle: "Phường Thành Tâm · 1.2 Tỷ",
-  },
-  {
-    id: "v2",
-    youtubeId: "dQw4w9WgXcQ",
-    title: "Lô góc 2 mặt tiền đối diện KCN Becamex – cơ hội đầu tư",
-    subtitle: "Phường Minh Đức · 2.5 Tỷ",
-  },
-  {
-    id: "v3",
-    // Ví dụ video từ máy: đặt file vào public/videos/review-dat.mp4
-    // youtubeId: undefined,
-    youtubeId: "dQw4w9WgXcQ",
-    // videoUrl: "/videos/review-dat.mp4",
-    title: "Nhà phố mặt tiền đường Hùng Vương – vị trí kinh doanh",
-    subtitle: "Trung tâm Chơn Thành · 3.8 Tỷ",
-  },
-];
+const youtubeIdFromUrl = (url = "") => {
+  if (!url) return "";
+  const match = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([^&?/]+)/i);
+  return match?.[1] || "";
+};
 
-// ─── Card YouTube ─────────────────────────────────────────────
 function YoutubeCard({ video }) {
   const [playing, setPlaying] = useState(false);
-  const thumb = `https://img.youtube.com/vi/${video.youtubeId}/maxresdefault.jpg`;
+  const youtubeId = youtubeIdFromUrl(video.videoUrl);
+  const thumb = `https://img.youtube.com/vi/${youtubeId}/maxresdefault.jpg`;
 
   return (
     <div className="group rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-white">
@@ -43,7 +20,7 @@ function YoutubeCard({ video }) {
         {playing ? (
           <iframe
             className="w-full h-full"
-            src={`https://www.youtube.com/embed/${video.youtubeId}?autoplay=1&rel=0`}
+            src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0`}
             title={video.title}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
@@ -54,7 +31,7 @@ function YoutubeCard({ video }) {
               src={thumb}
               alt={video.title}
               className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-              onError={e => { e.currentTarget.src = `https://img.youtube.com/vi/${video.youtubeId}/hqdefault.jpg`; }}
+              onError={e => { e.currentTarget.src = `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`; }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
             <div className="absolute inset-0 flex items-center justify-center">
@@ -68,15 +45,11 @@ function YoutubeCard({ video }) {
           </>
         )}
       </div>
-      <div className="p-4">
-        <h3 className="text-sm font-bold text-gray-800 line-clamp-2 leading-snug group-hover:text-blue-700 transition-colors">{video.title}</h3>
-        <p className="text-xs text-gray-400 mt-1 font-medium">{video.subtitle}</p>
-      </div>
+      <VideoText video={video} />
     </div>
   );
 }
 
-// ─── Card Video local (mp4) ───────────────────────────────────
 function LocalVideoCard({ video }) {
   return (
     <div className="group rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-white">
@@ -86,23 +59,52 @@ function LocalVideoCard({ video }) {
           className="w-full h-full object-cover"
           controls
           preload="metadata"
-          poster={video.poster || undefined}
+          poster={video.thumbnail || undefined}
         />
         <span className="absolute top-3 right-3 flex items-center gap-1 bg-black/70 text-white text-[10px] font-bold px-2 py-1 rounded-full pointer-events-none">
           <Video className="w-3 h-3 text-blue-400" /> Video
         </span>
       </div>
-      <div className="p-4">
-        <h3 className="text-sm font-bold text-gray-800 line-clamp-2 leading-snug group-hover:text-blue-700 transition-colors">{video.title}</h3>
-        <p className="text-xs text-gray-400 mt-1 font-medium">{video.subtitle}</p>
-      </div>
+      <VideoText video={video} />
     </div>
   );
 }
 
-// ─── Section chính ────────────────────────────────────────────
-export default function VideoReview({ videos = DEFAULT_VIDEOS }) {
-  if (!videos || videos.length === 0) return null;
+function VideoText({ video }) {
+  return (
+    <div className="p-4">
+      <h3 className="text-sm font-bold text-gray-800 line-clamp-2 leading-snug group-hover:text-blue-700 transition-colors">{video.title}</h3>
+      <p className="text-xs text-gray-400 mt-1 font-medium">{video.subtitle}</p>
+    </div>
+  );
+}
+
+export default function VideoReview() {
+  const [videos, setVideos] = useState([]);
+
+  useEffect(() => {
+    let mounted = true;
+    fetchProperties().then((properties) => {
+      if (!mounted) return;
+      setVideos(
+        properties
+          .filter((property) => property.videoUrl)
+          .slice(0, 3)
+          .map((property) => ({
+            id: property.id,
+            title: property.title,
+            subtitle: [property.location, property.formattedPrice].filter(Boolean).join(" · "),
+            videoUrl: property.videoUrl,
+            thumbnail: property.thumbnail,
+          }))
+      );
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  if (!videos.length) return null;
 
   return (
     <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -118,10 +120,10 @@ export default function VideoReview({ videos = DEFAULT_VIDEOS }) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {videos.map(v =>
-          v.videoUrl
-            ? <LocalVideoCard key={v.id} video={v} />
-            : <YoutubeCard key={v.id} video={v} />
+        {videos.map(video =>
+          youtubeIdFromUrl(video.videoUrl)
+            ? <YoutubeCard key={video.id} video={video} />
+            : <LocalVideoCard key={video.id} video={video} />
         )}
       </div>
     </section>

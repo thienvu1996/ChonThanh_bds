@@ -338,6 +338,22 @@ export function normalizeLead(row = {}) {
   };
 }
 
+export function normalizeNewsArticle(row = {}) {
+  const publishedAt = row.published_at ?? row.publishedAt ?? row.created_at ?? "";
+  return {
+    ...row,
+    title: row.title ?? "",
+    excerpt: row.excerpt ?? "",
+    content: row.content ?? "",
+    category: row.category ?? "Tin tức",
+    image_url: row.image_url ?? row.imageUrl ?? "/assets/placeholder-land.jpg",
+    imageUrl: row.image_url ?? row.imageUrl ?? "/assets/placeholder-land.jpg",
+    published_at: publishedAt,
+    publishedAt,
+    date: publishedAt ? new Date(publishedAt).toLocaleDateString("vi-VN") : "",
+  };
+}
+
 function leadToDbPayload(payload = {}) {
   const phone = payload.phone ?? payload.sdt ?? "";
   const propertyId = payload.property_id ?? payload.propertyId ?? null;
@@ -492,4 +508,20 @@ export async function deleteLead(id) {
 
   if (error) throw new Error(`Lỗi xóa khách hàng: ${error.message}`);
   return { id };
+}
+
+// NEWS
+export async function fetchNewsArticles() {
+  const query = supabase
+    .from("news_articles")
+    .select("*")
+    .eq("is_published", true)
+    .order("published_at", { ascending: false });
+
+  const { data, error } = await withSiteFilter(query);
+  if (error) {
+    console.error("[api] fetchNewsArticles error:", error);
+    return [];
+  }
+  return (data || []).map(normalizeNewsArticle);
 }

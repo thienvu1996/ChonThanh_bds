@@ -1,6 +1,21 @@
 import { useState } from "react";
 import { Search, X, ChevronDown, ChevronUp } from "lucide-react";
-import { propertyTypes, priceRanges } from "../../utils/mockData";
+
+const PROPERTY_TYPES = [
+  { value: "all", label: "Tất cả loại BĐS" },
+  { value: "Đất nền", label: "Đất nền" },
+  { value: "Đất vườn", label: "Đất vườn" },
+  { value: "Nhà ở", label: "Nhà ở" },
+  { value: "Nhà phố", label: "Nhà phố" },
+];
+
+const PRICE_RANGES = [
+  { value: "all", label: "Tất cả mức giá" },
+  { value: "under-1ty", label: "Dưới 1 tỷ" },
+  { value: "1ty-2ty", label: "1 - 2 tỷ" },
+  { value: "2ty-5ty", label: "2 - 5 tỷ" },
+  { value: "over-5ty", label: "Trên 5 tỷ" },
+];
 
 const AREA_RANGES = [
   { value: "all",       label: "Tất cả diện tích" },
@@ -79,7 +94,7 @@ export default function SearchFilter({ onSearch }) {
           <div className="w-full lg:flex-1">
             <label className={labelCls}>Loại BĐS</label>
             <select value={filters.type} onChange={e => handleChange("type", e.target.value)} className={selectCls}>
-              {propertyTypes.map(t => (
+              {PROPERTY_TYPES.map(t => (
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
@@ -88,7 +103,7 @@ export default function SearchFilter({ onSearch }) {
           <div className="w-full lg:flex-1">
             <label className={labelCls}>Khoảng giá</label>
             <select value={filters.price} onChange={e => handleChange("price", e.target.value)} className={selectCls}>
-              {priceRanges.map(p => (
+              {PRICE_RANGES.map(p => (
                 <option key={p.value} value={p.value}>{p.label}</option>
               ))}
             </select>

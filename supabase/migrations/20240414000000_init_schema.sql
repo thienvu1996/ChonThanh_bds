@@ -69,6 +69,20 @@ CREATE TABLE IF NOT EXISTS leads (
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- 5. Bảng tin tức theo từng website
+CREATE TABLE IF NOT EXISTS news_articles (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  site_id uuid REFERENCES sites(id) ON DELETE CASCADE,
+  title text NOT NULL,
+  excerpt text,
+  content text,
+  category text DEFAULT 'Tin tức',
+  image_url text,
+  is_published boolean DEFAULT true,
+  published_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- Seed website mặc định
 INSERT INTO sites (site_key, name, is_default)
 VALUES ('default', 'BĐS Chơn Thành', true)
@@ -80,11 +94,12 @@ FROM sites
 WHERE site_key = 'default'
 ON CONFLICT (site_id) DO NOTHING;
 
--- 5. BẢO MẬT (RLS)
+-- 6. BẢO MẬT (RLS)
 ALTER TABLE sites ENABLE ROW LEVEL SECURITY;
 ALTER TABLE properties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE news_articles ENABLE ROW LEVEL SECURITY;
 
 -- Cấu hình Policies
 DO $$ 
@@ -93,17 +108,21 @@ BEGIN
     DROP POLICY IF EXISTS "Cho phép xem BĐS công khai" ON properties;
     DROP POLICY IF EXISTS "Cho phép xem Cài đặt công khai" ON settings;
     DROP POLICY IF EXISTS "Cho phép khách gửi SĐT" ON leads;
+    DROP POLICY IF EXISTS "Cho phép xem Tin tức công khai" ON news_articles;
     DROP POLICY IF EXISTS "Admin quản lý Website" ON sites;
     DROP POLICY IF EXISTS "Admin quản lý BĐS" ON properties;
     DROP POLICY IF EXISTS "Admin quản lý Cấu hình" ON settings;
     DROP POLICY IF EXISTS "Admin quản lý Khách hàng" ON leads;
+    DROP POLICY IF EXISTS "Admin quản lý Tin tức" ON news_articles;
 END $$;
 
 CREATE POLICY "Cho phép xem Website công khai" ON sites FOR SELECT USING (true);
 CREATE POLICY "Cho phép xem BĐS công khai" ON properties FOR SELECT USING (true);
 CREATE POLICY "Cho phép xem Cài đặt công khai" ON settings FOR SELECT USING (true);
 CREATE POLICY "Cho phép khách gửi SĐT" ON leads FOR INSERT WITH CHECK (true);
+CREATE POLICY "Cho phép xem Tin tức công khai" ON news_articles FOR SELECT USING (is_published = true);
 CREATE POLICY "Admin quản lý Website" ON sites FOR ALL TO authenticated USING (true);
 CREATE POLICY "Admin quản lý BĐS" ON properties FOR ALL TO authenticated USING (true);
 CREATE POLICY "Admin quản lý Cấu hình" ON settings FOR ALL TO authenticated USING (true);
 CREATE POLICY "Admin quản lý Khách hàng" ON leads FOR ALL TO authenticated USING (true);
+CREATE POLICY "Admin quản lý Tin tức" ON news_articles FOR ALL TO authenticated USING (true);
