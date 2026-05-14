@@ -42,8 +42,22 @@ const formatArea = (raw) => {
   return n && !Number.isNaN(n) ? `${n} m²` : "";
 };
 
-const toSettingsRow = (settings = {}) => ({
-  id: 1,
+const getDefaultSite = async () => {
+  const { data, error } = await supabase
+    .from("sites")
+    .upsert(
+      { site_key: "default", name: "BĐS Chơn Thành", is_default: true },
+      { onConflict: "site_key" }
+    )
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+const toSettingsRow = (settings = {}, siteId) => ({
+  site_id: siteId,
   site_title: settings.site_title ?? settings.siteTitle ?? "BĐS Chơn Thành",
   hero_title: settings.hero_title ?? settings.heroTitle ?? "",
   hero_subtitle: settings.hero_subtitle ?? settings.heroSubtitle ?? "",
@@ -56,7 +70,7 @@ const toSettingsRow = (settings = {}) => ({
   search_prefix: settings.search_prefix ?? settings.searchPrefix ?? "Chơn Thành, Bình Phước",
 });
 
-const toPropertyRow = (property = {}) => {
+const toPropertyRow = (property = {}, siteId) => {
   const price = toNumberOrNull(property.price);
   const area = toNumberOrNull(property.area);
   const images = normalizeArray(property.images);
@@ -67,6 +81,7 @@ const toPropertyRow = (property = {}) => {
 
   return {
     ...(id ? { id } : {}),
+    site_id: siteId,
     legacy_id: property.legacy_id ?? (property.id && !id ? property.id : null),
     title: property.title,
     description: property.description ?? null,
@@ -101,19 +116,20 @@ async function seed() {
   try {
     const dbPath = path.resolve(process.cwd(), "api/db.json");
     const dbData = JSON.parse(fs.readFileSync(dbPath, "utf8"));
+    const defaultSite = await getDefaultSite();
 
     if (dbData.settings) {
       console.log("Đang đẩy cấu hình web...");
       const { error } = await supabase
         .from("settings")
-        .upsert(toSettingsRow(dbData.settings), { onConflict: "id" });
+        .upsert(toSettingsRow(dbData.settings, defaultSite.id), { onConflict: "site_id" });
 
       if (error) throw error;
     }
 
     if (dbData.properties?.length) {
       console.log(`Đang đẩy ${dbData.properties.length} bất động sản...`);
-      const rows = dbData.properties.map(toPropertyRow);
+      const rows = dbData.properties.map((property) => toPropertyRow(property, defaultSite.id));
       const { error } = await supabase
         .from("properties")
         .upsert(rows, { onConflict: "legacy_id" });

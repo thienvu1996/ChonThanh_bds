@@ -2,9 +2,16 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Settings as SettingsIcon, Save, Globe, Phone, Mail, 
   MapPin, Image as ImageIcon, Layout, Shield, 
-  RefreshCcw, Check, Sparkles, Camera
+  RefreshCcw, Check, Sparkles, Camera, Plus
 } from "lucide-react";
-import { fetchSettings } from "../../services/api";
+import {
+  fetchSettings,
+  fetchSites,
+  getActiveSiteId,
+  isSuperAdminSession,
+  saveSite,
+  setActiveSiteId,
+} from "../../services/api";
 import { saveSettings } from "../../utils/settingsStore";
 import toast from "react-hot-toast";
 
@@ -27,15 +34,31 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [sites, setSites] = useState([]);
+  const [activeSite, setActiveSite] = useState(null);
+  const [savingSite, setSavingSite] = useState(false);
   const bannerInputRef = useRef(null);
 
   useEffect(() => {
-    loadSettings();
+    bootSettings();
   }, []);
 
-  const loadSettings = async () => {
+  const bootSettings = async () => {
     setLoading(true);
     try {
+      const superAdmin = await isSuperAdminSession();
+      setIsSuperAdmin(superAdmin);
+
+      const siteList = await fetchSites();
+      setSites(siteList);
+
+      const selected = siteList.find((site) => site.id === getActiveSiteId()) || siteList[0] || null;
+      if (selected) {
+        setActiveSite(selected);
+        setActiveSiteId(selected.id);
+      }
+
       const data = await fetchSettings();
       if (data) setSettings(data);
     } catch (e) {
@@ -45,9 +68,55 @@ export default function SettingsPage() {
     }
   };
 
+  const reloadSettings = async () => {
+    const data = await fetchSettings();
+    if (data) setSettings(data);
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setSettings(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSiteChange = (e) => {
+    const next = sites.find((site) => site.id === e.target.value);
+    if (!next) return;
+    setActiveSite(next);
+    setActiveSiteId(next.id);
+    reloadSettings();
+  };
+
+  const handleSiteFieldChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setActiveSite(prev => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
+  };
+
+  const handleNewSite = () => {
+    const suffix = Date.now().toString().slice(-5);
+    setActiveSite({
+      name: "Website mới",
+      site_key: `site-${suffix}`,
+      domain: "",
+      is_default: false,
+    });
+  };
+
+  const handleSaveSite = async () => {
+    if (!activeSite) return;
+    setSavingSite(true);
+    try {
+      const saved = await saveSite(activeSite);
+      const nextSites = await fetchSites();
+      setSites(nextSites);
+      setActiveSite(saved);
+      setActiveSiteId(saved.id);
+      await reloadSettings();
+      toast.success("Đã lưu cấu hình website");
+    } catch (error) {
+      toast.error(error.message || "Không thể lưu website");
+    } finally {
+      setSavingSite(false);
+    }
   };
 
   const handleUploadBanner = async (e) => {
@@ -122,6 +191,69 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-8">
+        {isSuperAdmin && (
+          <section className="bg-white rounded-[2.5rem] border border-blue-100 shadow-sm p-8 space-y-6">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-blue-600">
+                <Globe size={20} />
+                <h2 className="font-black uppercase tracking-widest text-sm">Quản lý nhiều Website</h2>
+              </div>
+              <button
+                type="button"
+                onClick={handleNewSite}
+                className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2 rounded-xl font-black text-xs uppercase hover:bg-blue-100"
+              >
+                <Plus size={16} /> Site mới
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Website đang cấu hình</label>
+                <select
+                  value={activeSite?.id || ""}
+                  onChange={handleSiteChange}
+                  className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold"
+                >
+                  {sites.map(site => (
+                    <option key={site.id} value={site.id}>{site.name} ({site.site_key})</option>
+                  ))}
+                  {!activeSite?.id && <option value="">Website mới</option>}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Tên Website nội bộ</label>
+                <input name="name" value={activeSite?.name || ""} onChange={handleSiteFieldChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">VITE_SITE_KEY</label>
+                <input name="site_key" value={activeSite?.site_key || ""} onChange={handleSiteFieldChange} className="w-full px-5 py-4 bg-blue-50/30 border border-blue-100 rounded-2xl outline-none font-bold text-blue-700" placeholder="chon-thanh" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Domain FE</label>
+                <input name="domain" value={activeSite?.domain || ""} onChange={handleSiteFieldChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold" placeholder="bdschonthanh.vn" />
+              </div>
+            </div>
+
+            <label className="inline-flex items-center gap-3 text-xs font-black uppercase tracking-widest text-gray-500">
+              <input type="checkbox" name="is_default" checked={Boolean(activeSite?.is_default)} onChange={handleSiteFieldChange} className="w-4 h-4" />
+              Website mặc định khi không khớp domain
+            </label>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleSaveSite}
+                disabled={savingSite}
+                className="flex items-center gap-2 bg-gray-900 hover:bg-black text-white px-8 py-3 rounded-2xl font-black shadow-xl transition-all active:scale-95 disabled:opacity-50"
+              >
+                {savingSite ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={18} />}
+                LƯU WEBSITE
+              </button>
+            </div>
+          </section>
+        )}
+
         {/* Banner Section */}
         <section className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden p-8 space-y-6">
           <div className="flex items-center gap-2 text-blue-600">

@@ -2,6 +2,8 @@
 import { supabase } from "../utils/supabaseClient";
 
 const DEFAULT_COORDINATES = { lat: 11.424, lng: 106.5962 };
+const DEFAULT_SITE_KEY = "default";
+const ACTIVE_SITE_KEY = "bds_active_site_id";
 const DEFAULT_SETTINGS_VALUES = {
   siteTitle: "BĐS Chơn Thành",
   heroTitle: "BĐS CHƠN THÀNH - GIÁ TRỊ THỰC, SINH LỜI THỰC",
@@ -15,6 +17,8 @@ const DEFAULT_SETTINGS_VALUES = {
   searchPrefix: "Chơn Thành, Bình Phước",
 };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+let sitePromise = null;
 
 const cleanObject = (obj) =>
   Object.fromEntries(Object.entries(obj).filter(([, value]) => value !== undefined));
@@ -39,6 +43,36 @@ const normalizeCoordinates = (value) => {
   return { lat, lng };
 };
 
+const browserHost = () => {
+  if (typeof window === "undefined") return "";
+  return window.location.hostname || "";
+};
+
+const runtimeSiteKey = () => {
+  const envKey = import.meta.env.VITE_SITE_KEY;
+  if (envKey) return envKey;
+  const host = browserHost();
+  if (!host || host === "localhost" || host === "127.0.0.1") return DEFAULT_SITE_KEY;
+  return host;
+};
+
+export function getActiveSiteId() {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem(ACTIVE_SITE_KEY) || "";
+}
+
+export function setActiveSiteId(siteId) {
+  if (typeof window === "undefined") return;
+  if (siteId) window.localStorage.setItem(ACTIVE_SITE_KEY, siteId);
+  else window.localStorage.removeItem(ACTIVE_SITE_KEY);
+  sitePromise = null;
+}
+
+export const isSuperAdminSession = async () => {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user?.app_metadata?.role === "super_admin";
+};
+
 export const formatPrice = (raw) => {
   const n = Number(raw);
   if (!n || Number.isNaN(n)) return "";
@@ -50,6 +84,117 @@ export const formatPrice = (raw) => {
 export const formatArea = (raw) => {
   const n = Number(raw);
   return n && !Number.isNaN(n) ? `${n} m²` : "";
+};
+
+export function normalizeSite(row = {}) {
+  return {
+    ...row,
+    id: row.id ?? "",
+    site_key: row.site_key ?? row.siteKey ?? DEFAULT_SITE_KEY,
+    siteKey: row.site_key ?? row.siteKey ?? DEFAULT_SITE_KEY,
+    name: row.name ?? "Website",
+    domain: row.domain ?? "",
+    is_default: Boolean(row.is_default ?? row.isDefault),
+    isDefault: Boolean(row.is_default ?? row.isDefault),
+  };
+}
+
+async function fetchSiteById(siteId) {
+  if (!siteId) return null;
+  const { data, error } = await supabase
+    .from("sites")
+    .select("*")
+    .eq("id", siteId)
+    .maybeSingle();
+  if (error) return null;
+  return data ? normalizeSite(data) : null;
+}
+
+async function resolveSite() {
+  const activeSiteId = getActiveSiteId();
+  if (activeSiteId) {
+    const activeSite = await fetchSiteById(activeSiteId);
+    if (activeSite) return activeSite;
+  }
+
+  const siteKey = runtimeSiteKey();
+  const host = browserHost();
+
+  const byKey = await supabase
+    .from("sites")
+    .select("*")
+    .eq("site_key", siteKey)
+    .maybeSingle();
+  if (!byKey.error && byKey.data) return normalizeSite(byKey.data);
+
+  if (host) {
+    const byDomain = await supabase
+      .from("sites")
+      .select("*")
+      .eq("domain", host)
+      .maybeSingle();
+    if (!byDomain.error && byDomain.data) return normalizeSite(byDomain.data);
+  }
+
+  const fallback = await supabase
+    .from("sites")
+    .select("*")
+    .eq("is_default", true)
+    .limit(1)
+    .maybeSingle();
+  if (!fallback.error && fallback.data) return normalizeSite(fallback.data);
+
+  return null;
+}
+
+export async function getCurrentSite() {
+  if (!sitePromise) sitePromise = resolveSite();
+  return sitePromise;
+}
+
+export async function fetchSites() {
+  const { data, error } = await supabase
+    .from("sites")
+    .select("*")
+    .order("is_default", { ascending: false })
+    .order("name", { ascending: true });
+  if (error) {
+    console.warn("[api] fetchSites error:", error.message);
+    return [];
+  }
+  return (data || []).map(normalizeSite);
+}
+
+export async function saveSite(payload = {}) {
+  const row = cleanObject({
+    site_key: payload.site_key ?? payload.siteKey,
+    name: payload.name,
+    domain: payload.domain || null,
+    is_default: Boolean(payload.is_default ?? payload.isDefault),
+  });
+
+  if (!row.site_key?.trim()) throw new Error("Thiếu mã website");
+  if (!row.name?.trim()) throw new Error("Thiếu tên website");
+
+  const query = payload.id
+    ? supabase.from("sites").update(row).eq("id", payload.id)
+    : supabase.from("sites").insert([row]);
+
+  const { data, error } = await query.select().single();
+  if (error) throw new Error(`Lỗi lưu website: ${error.message}`);
+  const site = normalizeSite(data);
+  setActiveSiteId(site.id);
+  return site;
+}
+
+const withSiteFilter = async (query) => {
+  const site = await getCurrentSite();
+  return site?.id ? query.eq("site_id", site.id) : query;
+};
+
+const withSitePayload = async (payload) => {
+  const site = await getCurrentSite();
+  return site?.id ? { ...payload, site_id: site.id } : payload;
 };
 
 export function normalizeSettings(row = {}) {
@@ -84,7 +229,6 @@ export function normalizeSettings(row = {}) {
 function settingsToDbPayload(payload = {}) {
   const settings = normalizeSettings(payload);
   return {
-    id: 1,
     site_title: settings.site_title,
     hero_title: settings.hero_title,
     hero_subtitle: settings.hero_subtitle,
@@ -213,11 +357,12 @@ function leadToDbPayload(payload = {}) {
 
 // PROPERTIES
 export async function fetchProperties() {
-  const { data, error } = await supabase
+  const query = supabase
     .from("properties")
     .select("*")
     .order("posted_at", { ascending: false });
 
+  const { data, error } = await withSiteFilter(query);
   if (error) {
     console.error("[api] fetchProperties error:", error);
     return [];
@@ -226,23 +371,22 @@ export async function fetchProperties() {
 }
 
 export async function fetchPropertyDetails(id) {
-  const query = supabase.from("properties").select("*");
-  const { data, error } = await (UUID_RE.test(id)
-    ? query.eq("id", id)
-    : query.eq("legacy_id", id)
-  ).single();
+  let query = supabase.from("properties").select("*");
+  query = UUID_RE.test(id) ? query.eq("id", id) : query.eq("legacy_id", id);
+  const { data, error } = await withSiteFilter(query);
 
-  if (error) {
+  if (error || !data?.length) {
     console.error("[api] fetchPropertyDetails error:", error);
     throw new Error("Không tìm thấy thông tin BĐS");
   }
-  return normalizeProperty(data);
+  return normalizeProperty(data[0]);
 }
 
 export async function createProperty(payload) {
+  const row = await withSitePayload(propertyToDbPayload(payload));
   const { data, error } = await supabase
     .from("properties")
-    .insert([propertyToDbPayload(payload)])
+    .insert([row])
     .select()
     .single();
 
@@ -251,9 +395,10 @@ export async function createProperty(payload) {
 }
 
 export async function updateProperty(id, payload) {
+  const row = await withSitePayload(propertyToDbPayload(payload));
   const { data, error } = await supabase
     .from("properties")
-    .update(propertyToDbPayload(payload))
+    .update(row)
     .eq("id", id)
     .select()
     .single();
@@ -274,23 +419,27 @@ export async function deleteProperty(id) {
 
 // SETTINGS
 export async function fetchSettings() {
-  const { data, error } = await supabase
-    .from("settings")
-    .select("*")
-    .eq("id", 1)
-    .maybeSingle();
+  const site = await getCurrentSite();
+  const query = supabase.from("settings").select("*");
+  const scoped = site?.id ? query.eq("site_id", site.id) : query.eq("id", 1);
+  const { data, error } = await scoped.limit(1).maybeSingle();
 
   if (error) {
     console.warn("[api] Lỗi tải cấu hình:", error.message);
     return null;
   }
-  return data ? normalizeSettings(data) : null;
+  return data ? normalizeSettings(data) : normalizeSettings({ site_id: site?.id });
 }
 
 export async function updateSettings(newSettings) {
+  const site = await getCurrentSite();
+  const row = settingsToDbPayload(newSettings);
+  const payload = site?.id ? { ...row, site_id: site.id } : { ...row, id: 1 };
+  const options = site?.id ? { onConflict: "site_id" } : undefined;
+
   const { data, error } = await supabase
     .from("settings")
-    .upsert(settingsToDbPayload(newSettings))
+    .upsert(payload, options)
     .select()
     .single();
 
@@ -300,7 +449,7 @@ export async function updateSettings(newSettings) {
 
 // LEADS
 export async function submitLead(payload) {
-  const row = leadToDbPayload(payload);
+  const row = await withSitePayload(leadToDbPayload(payload));
   const { error } = await supabase
     .from("leads")
     .insert([row]);
@@ -310,11 +459,12 @@ export async function submitLead(payload) {
 }
 
 export async function fetchLeads() {
-  const { data, error } = await supabase
+  const query = supabase
     .from("leads")
     .select("*, properties(title)")
     .order("created_at", { ascending: false });
 
+  const { data, error } = await withSiteFilter(query);
   if (error) {
     console.error("[api] fetchLeads error:", error);
     throw new Error(`Lỗi tải danh sách khách: ${error.message}`);
